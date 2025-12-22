@@ -10,6 +10,7 @@ dependencies = [
     "segmentation-models-pytorch",
     "torchmetrics",
     "opencv-python",
+    "matplotlib>=3.10.8",
 ]
 
 [[tool.uv.index]]
@@ -30,6 +31,7 @@ dev = [
     "pydocstyle>=6.3.0",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
 ]
 
 [tool.black]
