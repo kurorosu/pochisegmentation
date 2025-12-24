@@ -4,6 +4,7 @@
 """
 
 from .directory_manager import PochiWorkspaceManager
+from .layer_wise_lr import create_layer_wise_param_groups
 from .timestamp_utils import (
     find_next_index,
     generate_timestamp_dir,
@@ -13,6 +14,7 @@ from .timestamp_utils import (
 
 __all__ = [
     "PochiWorkspaceManager",
+    "create_layer_wise_param_groups",
     "generate_timestamp_dir",
     "find_next_index",
     "parse_timestamp_dir",
