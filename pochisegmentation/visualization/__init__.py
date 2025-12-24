@@ -4,6 +4,21 @@
 """
 
 from .gradient_tracer import GradientTracer
+from .mask_visualizer import (
+    colorize_mask,
+    colorize_mask_grayscale,
+    create_color_palette,
+    overlay_mask_on_image,
+    save_mask_visualization,
+)
 from .metrics_exporter import TrainingMetricsExporter
 
-__all__ = ["TrainingMetricsExporter", "GradientTracer"]
+__all__ = [
+    "TrainingMetricsExporter",
+    "GradientTracer",
+    "colorize_mask",
+    "colorize_mask_grayscale",
+    "create_color_palette",
+    "overlay_mask_on_image",
+    "save_mask_visualization",
+]
