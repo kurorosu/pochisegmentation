@@ -33,6 +33,8 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
         _masks_dir: マスクディレクトリのパス.
         _transform: 画像とマスクに適用するtransform.
         _class_names: クラス名のリスト.
+        _remap_labels: マスク値を連続インデックスにリマップするかどうか.
+        _label_map: マスク値からクラスインデックスへのマッピング.
     """
 
     def __init__(
@@ -40,6 +42,7 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
         root: str | Path,
         split: str = "train",
         transform: Callable[..., Any] | None = None,
+        remap_labels: bool = True,
     ) -> None:
         """VOCSegmentationDatasetを初期化.
 
@@ -47,6 +50,9 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
             root: データセットのルートディレクトリパス.
             split: データ分割 ("train", "val", "trainval").
             transform: 画像とマスクに適用するtransform.
+            remap_labels: マスク値を連続クラスインデックスにリマップするかどうか.
+                labelmeなどで生成されたマスクはパレットインデックスを使用するため,
+                Trueにすると自動的に0, 1, 2, ... に変換します.
 
         Raises:
             FileNotFoundError: 必要なディレクトリやファイルが見つからない場合.
@@ -55,6 +61,8 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
         self._root = Path(root)
         self._split = split
         self._transform = transform
+        self._remap_labels = remap_labels
+        self._label_map: dict[int, int] | None = None
 
         # ディレクトリパスの設定
         self._images_dir = self._root / "JPEGImages"
@@ -79,6 +87,10 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
         # クラス名を読み込み (オプション)
         self._class_names = self._load_class_names()
 
+        # ラベルマップを構築
+        if self._remap_labels:
+            self._label_map = self._build_label_map()
+
     def _load_image_ids(self, split_file: Path) -> list[str]:
         """分割ファイルから画像IDを読み込む.
 
@@ -102,6 +114,42 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
             with open(class_names_file, "r") as f:
                 return [line.strip() for line in f if line.strip()]
         return None
+
+    def _build_label_map(self) -> dict[int, int]:
+        """マスク内のユニーク値からラベルマップを構築.
+
+        Returns:
+            元のマスク値から連続クラスインデックスへのマッピング辞書.
+        """
+        unique_values: set[int] = set()
+
+        for image_id in self._image_ids:
+            mask_path = self._masks_dir / f"{image_id}.png"
+            if mask_path.exists():
+                mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+                if mask is not None:
+                    unique_values.update(np.unique(mask).tolist())
+
+        # ソートして連続インデックスにマッピング
+        sorted_values = sorted(unique_values)
+        return {val: idx for idx, val in enumerate(sorted_values)}
+
+    def _remap_mask(self, mask: NDArray[np.uint8]) -> NDArray[np.uint8]:
+        """マスク値を連続クラスインデックスにリマップ.
+
+        Args:
+            mask: 元のマスク配列.
+
+        Returns:
+            リマップされたマスク配列.
+        """
+        if self._label_map is None:
+            return mask
+
+        remapped = np.zeros_like(mask)
+        for old_val, new_val in self._label_map.items():
+            remapped[mask == old_val] = new_val
+        return remapped
 
     def _find_image_file(self, image_id: str) -> Path:
         """画像ファイルのパスを検索.
@@ -156,6 +204,10 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
         if mask is None:
             raise FileNotFoundError(f"マスクファイルが見つかりません: {mask_path}")
 
+        # マスク値をリマップ (labelmeなどのパレットインデックス対応)
+        if self._remap_labels:
+            mask = self._remap_mask(mask)
+
         # transformを適用
         if self._transform is not None:
             image, mask = self._transform(image, mask)
@@ -190,3 +242,25 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
             画像IDのリスト.
         """
         return self._image_ids.copy()
+
+    def get_image_paths(self) -> list[Path]:
+        """全画像ファイルのパスリストを取得.
+
+        Returns:
+            画像ファイルパスのリスト.
+        """
+        paths = []
+        for image_id in self._image_ids:
+            try:
+                paths.append(self._find_image_file(image_id))
+            except FileNotFoundError:
+                continue
+        return paths
+
+    def get_mask_paths(self) -> list[Path]:
+        """全マスクファイルのパスリストを取得.
+
+        Returns:
+            マスクファイルパスのリスト.
+        """
+        return [self._masks_dir / f"{image_id}.png" for image_id in self._image_ids]

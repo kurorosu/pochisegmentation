@@ -10,6 +10,8 @@ from pochisegmentation.losses.seg_losses import (
 from pochisegmentation.metrics.seg_metrics import SegmentationMetrics
 from pochisegmentation.models.deeplabv3plus import DeepLabV3PlusModel
 from pochisegmentation.models.unet import UnetModel
+from pochisegmentation.seg_predictor import PochiSegmentationPredictor
+from pochisegmentation.seg_trainer import PochiSegmentationTrainer
 
 # モデル登録
 ComponentFactory.register_model("Unet", UnetModel)
@@ -32,4 +34,6 @@ __all__ = [
     "JaccardLoss",
     "CombinedLoss",
     "SegmentationMetrics",
+    "PochiSegmentationTrainer",
+    "PochiSegmentationPredictor",
 ]

@@ -216,3 +216,6 @@ tmp*.*
 # Data directory (keep folder, ignore contents)
 data/*
 !data/.gitkeep
+work_dirs/*
+results/*
+*.bat

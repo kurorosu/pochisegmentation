@@ -3,6 +3,11 @@
 import tempfile
 from pathlib import Path
 
+import matplotlib
+
+# テスト環境でGUIバックエンドを使わないように設定
+matplotlib.use("Agg")
+
 from pochisegmentation.visualization import TrainingMetricsExporter
 
 
