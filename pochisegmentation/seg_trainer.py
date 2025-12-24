@@ -4,9 +4,11 @@ DIP (依存性逆転原則) に基づき, 具象クラスではなくインタ�
 DI (依存性注入) により, コンストラクタで依存性を注入.
 """
 
+import csv
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import torch
 from torch import nn
 from torch.optim import Optimizer
@@ -96,17 +98,23 @@ class PochiSegmentationTrainer:
             "train_loss": [],
             "val_miou": [],
             "val_dice": [],
+            "learning_rate": [],
         }
 
         self._logger.info(f"訓練開始: {epochs} エポック")
 
         for epoch in range(epochs):
+            # 現在の学習率を記録
+            current_lr = self._optimizer.param_groups[0]["lr"]
+            history["learning_rate"].append(current_lr)
+
             # 訓練フェーズ
             train_loss = self._train_epoch(train_loader)
             history["train_loss"].append(train_loss)
 
             self._logger.info(
-                f"Epoch {epoch + 1}/{epochs} - Train Loss: {train_loss:.4f}"
+                f"Epoch {epoch + 1}/{epochs} - "
+                f"LR: {current_lr:.6f}, Train Loss: {train_loss:.4f}"
             )
 
             # 検証フェーズ
@@ -130,6 +138,9 @@ class PochiSegmentationTrainer:
         self._logger.info(
             f"訓練完了. Best mIoU: {self._best_miou:.4f} (Epoch {self._best_epoch + 1})"
         )
+
+        # 訓練履歴を可視化
+        self._save_training_history(history)
 
         return history
 
@@ -271,6 +282,116 @@ class PochiSegmentationTrainer:
         )
 
         return checkpoint
+
+    def _save_training_history(self, history: dict[str, list[float]]) -> None:
+        """訓練履歴をCSVとグラフで保存.
+
+        Args:
+            history: 訓練履歴の辞書.
+        """
+        if self._workspace_manager is None:
+            return
+
+        vis_dir = self._workspace_manager.get_visualization_dir()
+
+        # CSVに保存
+        csv_path = vis_dir / "training_history.csv"
+        epochs = len(history["train_loss"])
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                ["epoch", "learning_rate", "train_loss", "val_miou", "val_dice"]
+            )
+            for i in range(epochs):
+                writer.writerow(
+                    [
+                        i + 1,
+                        history["learning_rate"][i],
+                        history["train_loss"][i],
+                        history["val_miou"][i] if history["val_miou"] else "",
+                        history["val_dice"][i] if history["val_dice"] else "",
+                    ]
+                )
+        self._logger.info(f"訓練履歴をCSVに保存: {csv_path}")
+
+        # グラフを生成
+        self._generate_training_graphs(history, vis_dir)
+
+    def _generate_training_graphs(
+        self, history: dict[str, list[float]], output_dir: Path
+    ) -> None:
+        """訓練グラフを生成.
+
+        Args:
+            history: 訓練履歴の辞書.
+            output_dir: 出力ディレクトリ.
+        """
+        epochs = range(1, len(history["train_loss"]) + 1)
+
+        # 1. 損失グラフ
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(epochs, history["train_loss"], "b-", linewidth=2, label="Train Loss")
+        ax.set_xlabel("Epoch", fontsize=12)
+        ax.set_ylabel("Loss", fontsize=12)
+        ax.set_title("Training Loss", fontsize=14, fontweight="bold")
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="upper right")
+        plt.tight_layout()
+        loss_path = output_dir / "loss.png"
+        plt.savefig(loss_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        self._logger.info(f"損失グラフを保存: {loss_path}")
+
+        # 2. mIoU/Diceグラフ (検証データがある場合)
+        if history["val_miou"]:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(
+                epochs,
+                history["val_miou"],
+                "g-",
+                linewidth=2,
+                label="Val mIoU",
+            )
+            ax.plot(
+                epochs,
+                history["val_dice"],
+                "r-",
+                linewidth=2,
+                label="Val Dice",
+            )
+            ax.set_xlabel("Epoch", fontsize=12)
+            ax.set_ylabel("Score", fontsize=12)
+            ax.set_title("Validation Metrics", fontsize=14, fontweight="bold")
+            ax.set_ylim(0, 1)
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc="lower right")
+            plt.tight_layout()
+            metrics_path = output_dir / "metrics.png"
+            plt.savefig(metrics_path, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            self._logger.info(f"メトリクスグラフを保存: {metrics_path}")
+
+        # 3. 学習率グラフ
+        if history["learning_rate"]:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(
+                epochs,
+                history["learning_rate"],
+                "m-",
+                linewidth=2,
+                label="Learning Rate",
+            )
+            ax.set_xlabel("Epoch", fontsize=12)
+            ax.set_ylabel("Learning Rate", fontsize=12)
+            ax.set_title("Learning Rate Schedule", fontsize=14, fontweight="bold")
+            ax.set_yscale("log")
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc="upper right")
+            plt.tight_layout()
+            lr_path = output_dir / "learning_rate.png"
+            plt.savefig(lr_path, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            self._logger.info(f"学習率グラフを保存: {lr_path}")
 
     @property
     def model(self) -> nn.Module:
