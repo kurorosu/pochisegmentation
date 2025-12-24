@@ -211,3 +211,8 @@ repomix*.*
 Plan.md
 issue.*
 tmp*.*
+.kiro
+
+# Data directory (keep folder, ignore contents)
+data/*
+!data/.gitkeep
