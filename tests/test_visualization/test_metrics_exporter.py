@@ -8,7 +8,10 @@ import matplotlib
 # テスト環境でGUIバックエンドを使わないように設定
 matplotlib.use("Agg")
 
-from pochisegmentation.visualization import TrainingMetricsExporter
+from pochisegmentation.visualization import (
+    SegmentationMetricsExporter,
+    TrainingMetricsExporter,
+)
 
 
 class TestTrainingMetricsExporter:
@@ -283,3 +286,146 @@ class TestTrainingMetricsExporter:
             csv_path = exporter.export_to_csv()
             assert csv_path is not None
             assert csv_path.exists()
+
+
+class TestSegmentationMetricsExporter:
+    """SegmentationMetricsExporterクラスのテスト."""
+
+    def test_init(self) -> None:
+        """初期化のテスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exporter = SegmentationMetricsExporter(output_dir=Path(temp_dir))
+
+            assert exporter.output_dir == Path(temp_dir)
+            assert exporter.output_dir.exists()
+
+    def test_export_history(self) -> None:
+        """訓練履歴のCSV出力テスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exporter = SegmentationMetricsExporter(output_dir=Path(temp_dir))
+
+            history = {
+                "train_loss": [0.5, 0.4, 0.3],
+                "val_miou": [0.6, 0.7, 0.8],
+                "val_dice": [0.65, 0.75, 0.85],
+                "learning_rate": [0.001, 0.0008, 0.0005],
+            }
+
+            csv_path = exporter.export_history(history)
+
+            assert csv_path.exists()
+            assert csv_path.name == "training_history.csv"
+
+            # CSVファイルの内容確認
+            with open(csv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                assert len(lines) == 4  # ヘッダー + 3エポック
+                assert "epoch,learning_rate,train_loss,val_miou,val_dice" in lines[0]
+
+    def test_export_history_empty(self) -> None:
+        """空の履歴でのCSV出力テスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exporter = SegmentationMetricsExporter(output_dir=Path(temp_dir))
+
+            history: dict[str, list[float]] = {
+                "train_loss": [],
+                "val_miou": [],
+                "val_dice": [],
+                "learning_rate": [],
+            }
+
+            csv_path = exporter.export_history(history)
+
+            assert csv_path.exists()
+            # ヘッダーのみ
+            with open(csv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                assert len(lines) == 1
+
+    def test_generate_graphs(self) -> None:
+        """グラフ生成のテスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exporter = SegmentationMetricsExporter(output_dir=Path(temp_dir))
+
+            history = {
+                "train_loss": [0.5, 0.4, 0.3],
+                "val_miou": [0.6, 0.7, 0.8],
+                "val_dice": [0.65, 0.75, 0.85],
+                "learning_rate": [0.001, 0.0008, 0.0005],
+            }
+
+            graph_paths = exporter.generate_graphs(history)
+
+            assert len(graph_paths) == 3  # loss, metrics, learning_rate
+            assert all(p.exists() for p in graph_paths)
+
+            # ファイル名を確認
+            names = [p.name for p in graph_paths]
+            assert "loss.png" in names
+            assert "metrics.png" in names
+            assert "learning_rate.png" in names
+
+    def test_generate_graphs_without_validation(self) -> None:
+        """検証データなしのグラフ生成テスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exporter = SegmentationMetricsExporter(output_dir=Path(temp_dir))
+
+            history = {
+                "train_loss": [0.5, 0.4, 0.3],
+                "val_miou": [],
+                "val_dice": [],
+                "learning_rate": [0.001, 0.0008, 0.0005],
+            }
+
+            graph_paths = exporter.generate_graphs(history)
+
+            # loss + learning_rate のみ
+            assert len(graph_paths) == 2
+            names = [p.name for p in graph_paths]
+            assert "loss.png" in names
+            assert "learning_rate.png" in names
+            assert "metrics.png" not in names
+
+    def test_generate_graphs_empty(self) -> None:
+        """空の履歴でのグラフ生成テスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exporter = SegmentationMetricsExporter(output_dir=Path(temp_dir))
+
+            history: dict[str, list[float]] = {
+                "train_loss": [],
+                "val_miou": [],
+                "val_dice": [],
+                "learning_rate": [],
+            }
+
+            graph_paths = exporter.generate_graphs(history)
+
+            assert len(graph_paths) == 0
+
+    def test_export_all(self) -> None:
+        """CSVとグラフの両方をエクスポートするテスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exporter = SegmentationMetricsExporter(output_dir=Path(temp_dir))
+
+            history = {
+                "train_loss": [0.5, 0.4, 0.3],
+                "val_miou": [0.6, 0.7, 0.8],
+                "val_dice": [0.65, 0.75, 0.85],
+                "learning_rate": [0.001, 0.0008, 0.0005],
+            }
+
+            csv_path, graph_paths = exporter.export_all(history)
+
+            assert csv_path.exists()
+            assert len(graph_paths) == 3
+            assert all(p.exists() for p in graph_paths)
+
+    def test_output_dir_creation(self) -> None:
+        """出力ディレクトリの自動作成テスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            new_dir = Path(temp_dir) / "new_subdir"
+
+            exporter = SegmentationMetricsExporter(output_dir=new_dir)
+
+            assert new_dir.exists()
+            assert exporter.output_dir == new_dir
