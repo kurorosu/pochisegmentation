@@ -6,14 +6,8 @@ Usage:
     # 対話型モード (訓練/推論を選択)
     python pochi.py
 
-    # 対話型訓練
-    python pochi.py train
-
     # 設定ファイル指定訓練
     python pochi.py train --config configs/pochi_seg_config.py
-
-    # 対話型推論
-    python pochi.py infer
 
     # 引数指定推論
     python pochi.py infer --model-path work_dirs/xxx/models/best.pth \
@@ -21,54 +15,12 @@ Usage:
 """
 
 import argparse
-import sys
 
-import questionary
-from rich.console import Console
-from rich.panel import Panel
-
-from pochisegmentation.cli import (
-    interactive_infer,
-    interactive_train,
-    seg_infer,
-    seg_train,
+from pochisegmentation.cli.commands import (
+    infer_command,
+    interactive_main,
+    train_command,
 )
-
-
-def interactive_mode_select() -> str | None:
-    """対話モードで訓練/推論を選択.
-
-    Returns:
-        "train" または "infer". キャンセル時は None.
-    """
-    console = Console()
-    console.print()
-    console.print(
-        Panel(
-            "セグメンテーションツールへようこそ",
-            title="PochiSegmentation",
-            border_style="blue",
-        )
-    )
-    console.print()
-
-    options = [
-        questionary.Choice(
-            title="訓練 (Train) - モデルを訓練する",
-            value="train",
-        ),
-        questionary.Choice(
-            title="推論 (Infer) - 学習済みモデルで推論する",
-            value="infer",
-        ),
-    ]
-
-    result: str | None = questionary.select(
-        "実行モードを選択",
-        choices=options,
-    ).ask()
-
-    return result
 
 
 def main() -> None:
@@ -118,31 +70,14 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "train":
-        if args.config:
-            # 設定ファイル指定モード
-            seg_train(args)
-        else:
-            # 対話モード
-            interactive_train()
+        train_command(args)
     elif args.command == "infer":
-        if args.model_path and args.data:
-            # 引数指定モード
-            seg_infer(args)
-        else:
-            # 対話モード
-            interactive_infer()
+        infer_command(args)
     elif args.command is None:
         # サブコマンドなし: 対話でモード選択
-        mode = interactive_mode_select()
-        if mode == "train":
-            interactive_train()
-        elif mode == "infer":
-            interactive_infer()
-        else:
-            sys.exit(0)
+        interactive_main()
     else:
         parser.print_help()
-        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -1,17 +1,16 @@
-"""セグメンテーション推論コマンドの実装."""
+"""推論のオーケストレーション.
 
-import argparse
-import sys
+モデル読み込みと推論の実行を行う.
+CLIの入力方法（引数/対話）には依存しない.
+"""
+
 from pathlib import Path
 
 import cv2
 import torch
 from torchvision.transforms import v2
 
-from pochisegmentation import (
-    ComponentFactory,
-    PochiSegmentationPredictor,
-)
+from pochisegmentation import ComponentFactory, PochiSegmentationPredictor
 from pochisegmentation.exceptions import PochiConfigError
 from pochisegmentation.logging.logger_manager import LoggerManager
 from pochisegmentation.utils.config_loader import ConfigLoader
@@ -26,19 +25,66 @@ from pochisegmentation.visualization.mask_visualizer import (
 )
 
 
-def seg_infer(args: argparse.Namespace) -> None:
-    """セグメンテーション推論を実行.
+def resolve_device(device: str) -> str:
+    """デバイスを解決.
 
     Args:
-        args: コマンドライン引数.
-    """
-    logger_manager = LoggerManager()
-    logger = logger_manager.get_logger("pochi")
+        device: 指定されたデバイス.
 
-    logger.info(f"モデル読み込み: {args.model_path}")
+    Returns:
+        利用可能なデバイス.
+    """
+    if device == "cuda" and not torch.cuda.is_available():
+        logger = LoggerManager().get_logger("pochi")
+        logger.warning("CUDAが利用できません. CPUを使用します.")
+        return "cpu"
+    return device
+
+
+def get_image_paths(data_path: Path) -> list[Path]:
+    """入力パスから画像パスのリストを取得.
+
+    Args:
+        data_path: 画像ファイル, ディレクトリ, またはパスリスト (.txt).
+
+    Returns:
+        画像パスのリスト.
+    """
+    if data_path.is_file() and data_path.suffix == ".txt":
+        # テキストファイル: パスリストとして読み込み
+        with open(data_path, "r", encoding="utf-8") as f:
+            return [Path(line.strip()) for line in f if line.strip()]
+    elif data_path.is_file():
+        # 単一画像ファイル
+        return [data_path]
+    else:
+        # ディレクトリ
+        return (
+            list(data_path.glob("*.jpg"))
+            + list(data_path.glob("*.png"))
+            + list(data_path.glob("*.bmp"))
+        )
+
+
+def run_inference(
+    model_path: Path,
+    data_path: Path,
+    output_dir: Path | None = None,
+    device: str = "cuda",
+) -> None:
+    """推論を実行.
+
+    Args:
+        model_path: モデルファイルのパス.
+        data_path: 入力画像, ディレクトリ, またはパスリスト (.txt).
+        output_dir: 出力ディレクトリ (Noneでデフォルト).
+        device: 使用デバイス.
+    """
+    logger = LoggerManager().get_logger("pochi")
+
+    logger.info(f"モデル読み込み: {model_path}")
 
     # 設定ファイル読み込み (モデルパスと同じディレクトリにあると仮定)
-    model_path = Path(args.model_path)
     config_path = model_path.parent.parent / "config.py"
 
     if config_path.exists():
@@ -46,17 +92,14 @@ def seg_infer(args: argparse.Namespace) -> None:
             config = ConfigLoader.load(str(config_path))
         except PochiConfigError as e:
             logger.error(f"設定エラー: {e}")
-            sys.exit(1)
+            raise
     else:
         logger.error(f"設定ファイルが見つかりません: {config_path}")
         logger.error("推論には訓練時の設定ファイルが必要です.")
-        sys.exit(1)
+        raise FileNotFoundError(f"設定ファイルが見つかりません: {config_path}")
 
-    # デバイス
-    device = args.device
-    if device == "cuda" and not torch.cuda.is_available():
-        logger.warning("CUDAが利用できません. CPUを使用します.")
-        device = "cpu"
+    # デバイス解決
+    device = resolve_device(device)
 
     # モデル作成
     model = ComponentFactory.create_model(config)
@@ -73,47 +116,30 @@ def seg_infer(args: argparse.Namespace) -> None:
 
     # Predictor作成
     predictor = PochiSegmentationPredictor.from_checkpoint(
-        checkpoint_path=args.model_path,
+        checkpoint_path=str(model_path),
         model=model,
         transform=transform,
         device=device,
     )
 
-    # 出力ディレクトリ作成 (work_dir方式)
-    # モデルパスから work_dir を特定: work_dirs/xxx/models/best.pth -> work_dirs/xxx/
+    # 出力ディレクトリ作成
     work_dir = model_path.parent.parent
-    if args.output:
-        # --output が指定されている場合はそれを使用
-        output_dir = Path(args.output)
+    if output_dir:
+        resolved_output_dir = output_dir
     else:
         # work_dir/predictions/yyyymmdd_xxx/ を使用
         predictions_base = work_dir / "predictions"
         predictions_base.mkdir(parents=True, exist_ok=True)
         date_str = get_current_date_str()
         next_index = find_next_index(predictions_base, date_str)
-        output_dir = predictions_base / format_workspace_name(date_str, next_index)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"出力ディレクトリ: {output_dir}")
-
-    # 推論実行
-    data_path = Path(args.data)
-
-    if data_path.is_file() and data_path.suffix == ".txt":
-        # テキストファイル: パスリストとして読み込み
-        logger.info(f"パスリストファイルを読み込み: {data_path}")
-        with open(data_path, "r", encoding="utf-8") as f:
-            image_paths = [Path(line.strip()) for line in f if line.strip()]
-    elif data_path.is_file():
-        # 単一画像ファイル
-        image_paths = [data_path]
-    else:
-        # ディレクトリ
-        image_paths = (
-            list(data_path.glob("*.jpg"))
-            + list(data_path.glob("*.png"))
-            + list(data_path.glob("*.bmp"))
+        resolved_output_dir = predictions_base / format_workspace_name(
+            date_str, next_index
         )
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"出力ディレクトリ: {resolved_output_dir}")
 
+    # 画像パス取得
+    image_paths = get_image_paths(data_path)
     logger.info(f"推論対象: {len(image_paths)} 枚")
 
     # クラス数を取得
@@ -131,7 +157,7 @@ def seg_infer(args: argparse.Namespace) -> None:
 
         # 1. カラーマスク単体を保存
         color_mask = colorize_mask(mask, num_classes=num_classes)
-        mask_output_path = output_dir / f"{image_path.stem}_mask.png"
+        mask_output_path = resolved_output_dir / f"{image_path.stem}_mask.png"
         cv2.imwrite(str(mask_output_path), cv2.cvtColor(color_mask, cv2.COLOR_RGB2BGR))
         logger.info(f"マスク保存: {mask_output_path}")
 
@@ -139,7 +165,7 @@ def seg_infer(args: argparse.Namespace) -> None:
         overlay = overlay_mask_on_image(
             original_image, mask, alpha=0.5, num_classes=num_classes
         )
-        vis_output_path = output_dir / f"{image_path.stem}_vis.png"
+        vis_output_path = resolved_output_dir / f"{image_path.stem}_vis.png"
         cv2.imwrite(str(vis_output_path), cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
         logger.info(f"オーバーレイ保存: {vis_output_path}")
 
