@@ -222,3 +222,243 @@ class TestPochiWorkspaceManager:
 
             with pytest.raises(FileNotFoundError, match="設定ファイルが見つかりません"):
                 manager.save_config(non_existent_path)
+
+    def test_get_visualization_dir(self) -> None:
+        """可視化ディレクトリ取得のテスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+            workspace = manager.create_workspace()
+
+            vis_dir = manager.get_visualization_dir()
+            assert vis_dir == workspace / "visualization"
+            assert vis_dir.exists()
+
+    def test_get_visualization_dir_no_workspace(self) -> None:
+        """ワークスペース未作成時の可視化ディレクトリ取得エラー."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+
+            with pytest.raises(
+                RuntimeError, match="ワークスペースが作成されていません"
+            ):
+                manager.get_visualization_dir()
+
+    def test_save_image_list(self) -> None:
+        """画像リスト保存のテスト."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+            workspace = manager.create_workspace()
+
+            image_paths = [
+                "/data/images/img1.jpg",
+                "/data/images/img2.jpg",
+                "/data/images/img3.png",
+            ]
+
+            saved_path = manager.save_image_list(image_paths)
+
+            assert saved_path == workspace / "images_list.txt"
+            assert saved_path.exists()
+
+            content = saved_path.read_text(encoding="utf-8").strip().split("\n")
+            assert content == image_paths
+
+    def test_save_image_list_custom_filename(self) -> None:
+        """カスタムファイル名での画像リスト保存."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+            workspace = manager.create_workspace()
+
+            image_paths = ["/img1.jpg", "/img2.jpg"]
+            saved_path = manager.save_image_list(image_paths, "custom_list.txt")
+
+            assert saved_path == workspace / "custom_list.txt"
+            assert saved_path.exists()
+
+    def test_save_image_list_no_workspace(self) -> None:
+        """ワークスペース未作成時の画像リスト保存エラー."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+
+            with pytest.raises(
+                RuntimeError, match="ワークスペースが作成されていません"
+            ):
+                manager.save_image_list(["/img.jpg"])
+
+    def test_save_config_no_workspace(self) -> None:
+        """ワークスペース未作成時の設定ファイル保存エラー."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+            config_path = Path(temp_dir) / "config.py"
+            config_path.write_text("test = 1")
+
+            with pytest.raises(
+                RuntimeError, match="ワークスペースが作成されていません"
+            ):
+                manager.save_config(config_path)
+
+    def test_save_dataset_paths_no_workspace(self) -> None:
+        """ワークスペース未作成時のデータセットパス保存エラー."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+
+            with pytest.raises(
+                RuntimeError, match="ワークスペースが作成されていません"
+            ):
+                manager.save_dataset_paths(["/train.jpg"])
+
+    def test_workspace_info_with_invalid_name(self) -> None:
+        """不正な形式のワークスペース名でのinfo取得."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+
+            # 不正な形式のディレクトリを手動設定
+            invalid_workspace = Path(temp_dir) / "invalid_workspace"
+            invalid_workspace.mkdir()
+            manager.current_workspace = invalid_workspace
+
+            info = manager.get_workspace_info()
+
+            # パースに失敗してもエラーにならず、date/indexはNone
+            assert info["workspace_path"] == str(invalid_workspace)
+            assert info["date"] is None
+            assert info["index"] is None
+
+    def test_get_available_workspaces_with_invalid_dirs(self) -> None:
+        """不正な形式のディレクトリを含む場合の一覧取得."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = PochiWorkspaceManager(temp_dir)
+
+            # 有効なワークスペースを作成
+            valid_workspace = manager.create_workspace()
+
+            # 不正な形式のディレクトリを作成
+            invalid_dir = Path(temp_dir) / "invalid_format"
+            invalid_dir.mkdir()
+
+            workspaces = manager.get_available_workspaces()
+
+            # 有効なワークスペースのみ取得される
+            assert len(workspaces) == 1
+            assert workspaces[0]["name"] == valid_workspace.name
+
+
+class TestInferenceWorkspaceManager:
+    """InferenceWorkspaceManagerクラスのテスト."""
+
+    def test_init(self) -> None:
+        """初期化テスト."""
+        from pochisegmentation.utils.directory_manager import InferenceWorkspaceManager
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = InferenceWorkspaceManager(temp_dir)
+            assert manager.base_dir == Path(temp_dir)
+            assert manager.current_workspace is None
+
+    def test_create_workspace(self) -> None:
+        """推論ワークスペース作成テスト."""
+        from pochisegmentation.utils.directory_manager import InferenceWorkspaceManager
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = InferenceWorkspaceManager(temp_dir)
+            workspace = manager.create_workspace()
+
+            assert workspace.exists()
+            assert workspace.is_dir()
+
+            # modelsディレクトリは作成されない
+            assert not (workspace / "models").exists()
+
+    def test_save_model_info(self) -> None:
+        """モデル情報保存テスト."""
+        from pochisegmentation.utils.directory_manager import InferenceWorkspaceManager
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = InferenceWorkspaceManager(temp_dir)
+            manager.create_workspace()
+
+            model_info = {
+                "model_path": "/path/to/model.pth",
+                "architecture": "Unet",
+                "num_classes": 4,
+            }
+
+            saved_path = manager.save_model_info(model_info)
+
+            assert saved_path.exists()
+            assert saved_path.name == "model_info.json"
+
+            import json
+
+            with open(saved_path, "r", encoding="utf-8") as f:
+                loaded_info = json.load(f)
+
+            assert loaded_info == model_info
+
+    def test_save_model_info_custom_filename(self) -> None:
+        """カスタムファイル名でのモデル情報保存."""
+        from pochisegmentation.utils.directory_manager import InferenceWorkspaceManager
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = InferenceWorkspaceManager(temp_dir)
+            manager.create_workspace()
+
+            model_info = {"test": "value"}
+            saved_path = manager.save_model_info(model_info, "custom_info.json")
+
+            assert saved_path.name == "custom_info.json"
+            assert saved_path.exists()
+
+    def test_save_model_info_no_workspace(self) -> None:
+        """ワークスペース未作成時のモデル情報保存エラー."""
+        from pochisegmentation.utils.directory_manager import InferenceWorkspaceManager
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = InferenceWorkspaceManager(temp_dir)
+
+            with pytest.raises(ValueError, match="ワークスペースが作成されていません"):
+                manager.save_model_info({"test": "value"})
+
+    def test_get_csv_output_path(self) -> None:
+        """CSV出力パス取得テスト."""
+        from pochisegmentation.utils.directory_manager import InferenceWorkspaceManager
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = InferenceWorkspaceManager(temp_dir)
+            workspace = manager.create_workspace()
+
+            csv_path = manager.get_csv_output_path("results.csv")
+
+            assert csv_path == workspace / "results.csv"
+
+    def test_get_csv_output_path_no_workspace(self) -> None:
+        """ワークスペース未作成時のCSVパス取得エラー."""
+        from pochisegmentation.utils.directory_manager import InferenceWorkspaceManager
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = InferenceWorkspaceManager(temp_dir)
+
+            with pytest.raises(ValueError, match="ワークスペースが作成されていません"):
+                manager.get_csv_output_path("results.csv")
+
+    def test_get_workspace_info(self) -> None:
+        """推論ワークスペース情報取得テスト."""
+        from pochisegmentation.utils.directory_manager import InferenceWorkspaceManager
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = InferenceWorkspaceManager(temp_dir)
+
+            # ワークスペース作成前
+            info_before = manager.get_workspace_info()
+            assert info_before["workspace"] is None
+            assert info_before["workspace_name"] is None
+            assert info_before["exists"] is False
+
+            # ワークスペース作成後
+            workspace = manager.create_workspace()
+            info_after = manager.get_workspace_info()
+
+            assert info_after["workspace"] == str(workspace)
+            assert info_after["workspace_name"] == workspace.name
+            assert info_after["base_dir"] == temp_dir
+            assert info_after["exists"] is True
