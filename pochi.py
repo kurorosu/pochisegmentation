@@ -12,7 +12,6 @@ Usage:
 """
 
 import argparse
-import importlib.util
 import sys
 from pathlib import Path
 from typing import Any
@@ -28,12 +27,14 @@ from pochisegmentation import (
     PochiSegmentationTrainer,
 )
 from pochisegmentation.datasets.voc_dataset import VOCSegmentationDataset
+from pochisegmentation.exceptions import PochiConfigError
 from pochisegmentation.logging.logger_manager import LoggerManager
 from pochisegmentation.transforms.seg_transforms import (
     SegmentationTransform,
     get_basic_train_transform,
     get_basic_val_transform,
 )
+from pochisegmentation.utils.config_loader import ConfigLoader
 from pochisegmentation.utils.directory_manager import PochiWorkspaceManager
 from pochisegmentation.utils.layer_wise_lr import create_layer_wise_param_groups
 from pochisegmentation.utils.timestamp_utils import (
@@ -45,38 +46,6 @@ from pochisegmentation.visualization.mask_visualizer import (
     colorize_mask,
     overlay_mask_on_image,
 )
-
-
-def load_config(config_path: str) -> dict[str, Any]:
-    """設定ファイルを読み込む.
-
-    Args:
-        config_path: 設定ファイルのパス.
-
-    Returns:
-        設定辞書.
-
-    Raises:
-        FileNotFoundError: 設定ファイルが存在しない場合.
-    """
-    config_path_obj = Path(config_path)
-    if not config_path_obj.exists():
-        raise FileNotFoundError(f"設定ファイルが見つかりません: {config_path}")
-
-    spec = importlib.util.spec_from_file_location("config", config_path_obj)
-    if spec is None or spec.loader is None:
-        raise ValueError(f"設定ファイルの読み込みに失敗しました: {config_path}")
-
-    config_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(config_module)
-
-    # モジュールの属性を辞書に変換
-    config: dict[str, Any] = {}
-    for key in dir(config_module):
-        if not key.startswith("_"):
-            config[key] = getattr(config_module, key)
-
-    return config
 
 
 def create_optimizer(
@@ -154,7 +123,11 @@ def seg_train(args: argparse.Namespace) -> None:
     logger = logger_manager.get_logger("pochi")
 
     logger.info(f"設定ファイルを読み込み: {args.config}")
-    config = load_config(args.config)
+    try:
+        config = ConfigLoader.load(args.config)
+    except PochiConfigError as e:
+        logger.error(f"設定エラー: {e}")
+        sys.exit(1)
 
     # ワークスペース作成
     workspace_manager = PochiWorkspaceManager(
@@ -274,16 +247,15 @@ def seg_infer(args: argparse.Namespace) -> None:
     config_path = model_path.parent.parent / "config.py"
 
     if config_path.exists():
-        config = load_config(str(config_path))
+        try:
+            config = ConfigLoader.load(str(config_path))
+        except PochiConfigError as e:
+            logger.error(f"設定エラー: {e}")
+            sys.exit(1)
     else:
-        logger.warning(f"設定ファイルが見つかりません: {config_path}")
-        logger.warning("デフォルト設定を使用します.")
-        config = {
-            "architecture": "Unet",
-            "encoder_name": "resnet34",
-            "num_classes": 4,
-            "image_size": 256,
-        }
+        logger.error(f"設定ファイルが見つかりません: {config_path}")
+        logger.error("推論には訓練時の設定ファイルが必要です.")
+        sys.exit(1)
 
     # デバイス
     device = args.device
