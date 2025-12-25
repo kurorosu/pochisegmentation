@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from pochi import create_optimizer, create_scheduler
 from pochisegmentation.exceptions import ConfigFileNotFoundError
+from pochisegmentation.factories import ComponentFactory
 from pochisegmentation.utils.config_loader import ConfigLoader
 
 
@@ -50,7 +50,7 @@ class TestCreateOptimizer:
         model = torch.nn.Linear(10, 10)
         config = {"optimizer": "Adam", "learning_rate": 0.001}
 
-        optimizer = create_optimizer(model, config)
+        optimizer = ComponentFactory.create_optimizer(model, config)
 
         assert isinstance(optimizer, torch.optim.Adam)
 
@@ -61,7 +61,7 @@ class TestCreateOptimizer:
         model = torch.nn.Linear(10, 10)
         config = {"optimizer": "AdamW", "learning_rate": 0.001}
 
-        optimizer = create_optimizer(model, config)
+        optimizer = ComponentFactory.create_optimizer(model, config)
 
         assert isinstance(optimizer, torch.optim.AdamW)
 
@@ -72,7 +72,7 @@ class TestCreateOptimizer:
         model = torch.nn.Linear(10, 10)
         config = {"optimizer": "SGD", "learning_rate": 0.001}
 
-        optimizer = create_optimizer(model, config)
+        optimizer = ComponentFactory.create_optimizer(model, config)
 
         assert isinstance(optimizer, torch.optim.SGD)
 
@@ -84,7 +84,7 @@ class TestCreateOptimizer:
         config = {"optimizer": "Unknown"}
 
         with pytest.raises(ValueError, match="Unknown optimizer"):
-            create_optimizer(model, config)
+            ComponentFactory.create_optimizer(model, config)
 
 
 class TestCreateScheduler:
@@ -98,7 +98,7 @@ class TestCreateScheduler:
         optimizer = torch.optim.Adam(model.parameters())
         config = {"scheduler": "CosineAnnealingLR", "scheduler_params": {"T_max": 100}}
 
-        scheduler = create_scheduler(optimizer, config)
+        scheduler = ComponentFactory.create_scheduler(optimizer, config)
 
         assert scheduler is not None
 
@@ -110,7 +110,7 @@ class TestCreateScheduler:
         optimizer = torch.optim.Adam(model.parameters())
         config = {"scheduler": "StepLR", "scheduler_params": {"step_size": 10}}
 
-        scheduler = create_scheduler(optimizer, config)
+        scheduler = ComponentFactory.create_scheduler(optimizer, config)
 
         assert scheduler is not None
 
@@ -122,7 +122,7 @@ class TestCreateScheduler:
         optimizer = torch.optim.Adam(model.parameters())
         config: dict[str, str] = {}
 
-        scheduler = create_scheduler(optimizer, config)
+        scheduler = ComponentFactory.create_scheduler(optimizer, config)
 
         assert scheduler is None
 
@@ -135,4 +135,4 @@ class TestCreateScheduler:
         config = {"scheduler": "Unknown"}
 
         with pytest.raises(ValueError, match="Unknown scheduler"):
-            create_scheduler(optimizer, config)
+            ComponentFactory.create_scheduler(optimizer, config)
