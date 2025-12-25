@@ -1,4 +1,4 @@
-"""対話型推論の設定収集."""
+"""推論設定の対話型ウィザード."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,7 +59,7 @@ def count_images(data_path: Path) -> int:
 
 
 @dataclass
-class InferenceConfig:
+class InferConfig:
     """対話で収集した推論設定."""
 
     model_path: str
@@ -72,14 +72,14 @@ class InferenceConfig:
         return count_images(Path(self.data_path))
 
 
-class InferenceRunner:
-    """対話型推論設定収集."""
+class InferWizard:
+    """推論設定の対話型ウィザード."""
 
     def __init__(self) -> None:
         """初期化."""
         self.console = Console()
 
-    def run(self) -> InferenceConfig | None:
+    def run(self) -> InferConfig | None:
         """対話を実行して推論設定を収集.
 
         Returns:
@@ -107,7 +107,7 @@ class InferenceRunner:
         if device is None:
             return None
 
-        config = InferenceConfig(
+        config = InferConfig(
             model_path=model_path,
             data_path=data_path,
             output_dir=output_dir,
@@ -255,7 +255,7 @@ class InferenceRunner:
 
         return result
 
-    def _confirm(self, config: InferenceConfig) -> bool:
+    def _confirm(self, config: InferConfig) -> bool:
         """設定確認画面を表示.
 
         Args:

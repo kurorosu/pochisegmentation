@@ -1,4 +1,4 @@
-"""対話型 CLI のフロー制御."""
+"""訓練設定の対話型ウィザード."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,8 +23,8 @@ from configs.presets import (
 
 
 @dataclass
-class InteractiveConfig:
-    """対話で収集した設定."""
+class TrainConfig:
+    """対話で収集した訓練設定."""
 
     data_root: str
     num_classes: int
@@ -133,14 +133,14 @@ class InteractiveConfig:
 _CUSTOM_PRESET = object()
 
 
-class InteractiveRunner:
-    """対話型設定収集."""
+class TrainWizard:
+    """訓練設定の対話型ウィザード."""
 
     def __init__(self) -> None:
         """初期化."""
         self.console = Console()
 
-    def run(self) -> InteractiveConfig | None:
+    def run(self) -> TrainConfig | None:
         """対話を実行して設定を収集.
 
         Returns:
@@ -204,7 +204,7 @@ class InteractiveRunner:
 
         scheduler = self._ask_scheduler()
 
-        config = InteractiveConfig(
+        config = TrainConfig(
             data_root=data_root,
             num_classes=num_classes,
             architecture=architecture,
@@ -422,7 +422,7 @@ class InteractiveRunner:
 
         return result
 
-    def _confirm(self, config: InteractiveConfig) -> str | None:
+    def _confirm(self, config: TrainConfig) -> str | None:
         """設定確認画面を表示.
 
         Args:
@@ -470,7 +470,7 @@ class InteractiveRunner:
 
         return result
 
-    def _save_config(self, config: InteractiveConfig) -> None:
+    def _save_config(self, config: TrainConfig) -> None:
         """設定を Python ファイルに保存.
 
         Args:

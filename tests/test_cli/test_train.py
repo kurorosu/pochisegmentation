@@ -1,19 +1,16 @@
-"""cli/train.py のテスト."""
+"""cli/commands.py の訓練コマンドテスト."""
 
 import argparse
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import torch
 
-from pochisegmentation.cli.train import seg_train
-from pochisegmentation.exceptions import PochiConfigError
+from pochisegmentation.cli.commands import train_command
 
 
-class TestSegTrain:
-    """seg_train関数のテスト."""
+class TestTrainCommand:
+    """train_command関数のテスト."""
 
     @pytest.fixture
     def mock_config_content(self) -> str:
@@ -42,7 +39,7 @@ device = "cpu"
         args = argparse.Namespace(config=str(tmp_path / "nonexistent.py"))
 
         with pytest.raises(SystemExit) as exc_info:
-            seg_train(args)
+            train_command(args)
 
         assert exc_info.value.code == 1
 
@@ -55,15 +52,15 @@ device = "cpu"
         args = argparse.Namespace(config=str(config_path))
 
         with pytest.raises(SystemExit) as exc_info:
-            seg_train(args)
+            train_command(args)
 
         assert exc_info.value.code == 1
 
-    @patch("pochisegmentation.cli.train.PochiSegmentationTrainer")
-    @patch("pochisegmentation.cli.train.DataLoader")
-    @patch("pochisegmentation.cli.train.VOCSegmentationDataset")
-    @patch("pochisegmentation.cli.train.ComponentFactory")
-    @patch("pochisegmentation.cli.train.PochiWorkspaceManager")
+    @patch("pochisegmentation.core.training.PochiSegmentationTrainer")
+    @patch("pochisegmentation.core.training.DataLoader")
+    @patch("pochisegmentation.core.training.VOCSegmentationDataset")
+    @patch("pochisegmentation.core.training.ComponentFactory")
+    @patch("pochisegmentation.core.training.PochiWorkspaceManager")
     def test_successful_training_flow(
         self,
         mock_workspace_manager: MagicMock,
@@ -113,7 +110,7 @@ device = "cpu"
         mock_trainer.return_value = mock_trainer_instance
 
         args = argparse.Namespace(config=str(config_path))
-        seg_train(args)
+        train_command(args)
 
         # 各コンポーネントが呼び出されたことを確認
         mock_workspace_manager.assert_called_once()
@@ -123,12 +120,12 @@ device = "cpu"
         mock_trainer_instance.train.assert_called_once()
         mock_trainer_instance.save_last_model.assert_called_once()
 
-    @patch("pochisegmentation.cli.train.torch.cuda.is_available")
-    @patch("pochisegmentation.cli.train.PochiSegmentationTrainer")
-    @patch("pochisegmentation.cli.train.DataLoader")
-    @patch("pochisegmentation.cli.train.VOCSegmentationDataset")
-    @patch("pochisegmentation.cli.train.ComponentFactory")
-    @patch("pochisegmentation.cli.train.PochiWorkspaceManager")
+    @patch("pochisegmentation.core.training.torch.cuda.is_available")
+    @patch("pochisegmentation.core.training.PochiSegmentationTrainer")
+    @patch("pochisegmentation.core.training.DataLoader")
+    @patch("pochisegmentation.core.training.VOCSegmentationDataset")
+    @patch("pochisegmentation.core.training.ComponentFactory")
+    @patch("pochisegmentation.core.training.PochiWorkspaceManager")
     def test_cuda_fallback_to_cpu(
         self,
         mock_workspace_manager: MagicMock,
@@ -176,7 +173,7 @@ device = "cuda"
         mock_trainer.return_value = mock_trainer_instance
 
         args = argparse.Namespace(config=str(config_path))
-        seg_train(args)
+        train_command(args)
 
         # Trainerにdevice='cpu'が渡されることを確認
         call_kwargs = mock_trainer.call_args[1]

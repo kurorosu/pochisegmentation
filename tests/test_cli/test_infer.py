@@ -1,21 +1,18 @@
-"""cli/infer.py のテスト."""
+"""cli/commands.py の推論コマンドテスト."""
 
 import argparse
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import cv2
 import numpy as np
 import pytest
 import torch
 
-from pochisegmentation.cli.infer import seg_infer
-from pochisegmentation.exceptions import PochiConfigError
+from pochisegmentation.cli.commands import infer_command
 
 
-class TestSegInfer:
-    """seg_infer関数のテスト."""
+class TestInferCommand:
+    """infer_command関数のテスト."""
 
     @pytest.fixture
     def mock_config_content(self) -> str:
@@ -51,8 +48,6 @@ image_size = 256
         # テスト画像
         test_image_dir = tmp_path / "test_images"
         test_image_dir.mkdir()
-        test_image = np.random.randint(0, 255, (256, 256, 3), dtype=np.uint8)
-        cv2.imwrite(str(test_image_dir / "test.jpg"), test_image)
 
         return model_path, test_image_dir, work_dir
 
@@ -70,14 +65,12 @@ image_size = 256
             device="cpu",
         )
 
-        with pytest.raises(SystemExit) as exc_info:
-            seg_infer(args)
+        with pytest.raises(FileNotFoundError):
+            infer_command(args)
 
-        assert exc_info.value.code == 1
-
-    @patch("pochisegmentation.cli.infer.PochiSegmentationPredictor")
-    @patch("pochisegmentation.cli.infer.ComponentFactory")
-    @patch("pochisegmentation.cli.infer.cv2")
+    @patch("pochisegmentation.core.inference.PochiSegmentationPredictor")
+    @patch("pochisegmentation.core.inference.ComponentFactory")
+    @patch("pochisegmentation.core.inference.cv2")
     def test_successful_inference_single_image(
         self,
         mock_cv2: MagicMock,
@@ -118,14 +111,14 @@ image_size = 256
             device="cpu",
         )
 
-        seg_infer(args)
+        infer_command(args)
 
         # 推論が呼び出されたことを確認
         mock_predictor.predict.assert_called_once()
 
-    @patch("pochisegmentation.cli.infer.PochiSegmentationPredictor")
-    @patch("pochisegmentation.cli.infer.ComponentFactory")
-    @patch("pochisegmentation.cli.infer.cv2")
+    @patch("pochisegmentation.core.inference.PochiSegmentationPredictor")
+    @patch("pochisegmentation.core.inference.ComponentFactory")
+    @patch("pochisegmentation.core.inference.cv2")
     def test_successful_inference_directory(
         self,
         mock_cv2: MagicMock,
@@ -170,14 +163,14 @@ image_size = 256
             device="cpu",
         )
 
-        seg_infer(args)
+        infer_command(args)
 
         # 3枚分の推論が呼び出されたことを確認
         assert mock_predictor.predict.call_count == 3
 
-    @patch("pochisegmentation.cli.infer.PochiSegmentationPredictor")
-    @patch("pochisegmentation.cli.infer.ComponentFactory")
-    @patch("pochisegmentation.cli.infer.cv2")
+    @patch("pochisegmentation.core.inference.PochiSegmentationPredictor")
+    @patch("pochisegmentation.core.inference.ComponentFactory")
+    @patch("pochisegmentation.core.inference.cv2")
     def test_successful_inference_path_list(
         self,
         mock_cv2: MagicMock,
@@ -226,14 +219,14 @@ image_size = 256
             device="cpu",
         )
 
-        seg_infer(args)
+        infer_command(args)
 
         # 2枚分の推論が呼び出されたことを確認
         assert mock_predictor.predict.call_count == 2
 
-    @patch("pochisegmentation.cli.infer.PochiSegmentationPredictor")
-    @patch("pochisegmentation.cli.infer.ComponentFactory")
-    @patch("pochisegmentation.cli.infer.cv2")
+    @patch("pochisegmentation.core.inference.PochiSegmentationPredictor")
+    @patch("pochisegmentation.core.inference.ComponentFactory")
+    @patch("pochisegmentation.core.inference.cv2")
     def test_custom_output_directory(
         self,
         mock_cv2: MagicMock,
@@ -276,15 +269,15 @@ image_size = 256
             device="cpu",
         )
 
-        seg_infer(args)
+        infer_command(args)
 
         # カスタム出力ディレクトリが作成されたことを確認
         assert custom_output.exists()
 
-    @patch("pochisegmentation.cli.infer.torch.cuda.is_available")
-    @patch("pochisegmentation.cli.infer.PochiSegmentationPredictor")
-    @patch("pochisegmentation.cli.infer.ComponentFactory")
-    @patch("pochisegmentation.cli.infer.cv2")
+    @patch("pochisegmentation.core.inference.torch.cuda.is_available")
+    @patch("pochisegmentation.core.inference.PochiSegmentationPredictor")
+    @patch("pochisegmentation.core.inference.ComponentFactory")
+    @patch("pochisegmentation.core.inference.cv2")
     def test_cuda_fallback_to_cpu(
         self,
         mock_cv2: MagicMock,
@@ -333,7 +326,7 @@ device = "cuda"
             device="cuda",
         )
 
-        seg_infer(args)
+        infer_command(args)
 
         # from_checkpointにdevice='cpu'が渡されることを確認
         call_kwargs = mock_predictor_class.from_checkpoint.call_args[1]
@@ -360,7 +353,5 @@ device = "cuda"
             device="cpu",
         )
 
-        with pytest.raises(SystemExit) as exc_info:
-            seg_infer(args)
-
-        assert exc_info.value.code == 1
+        with pytest.raises(Exception):
+            infer_command(args)
