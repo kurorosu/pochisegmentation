@@ -11,6 +11,8 @@ dependencies = [
     "torchmetrics",
     "opencv-python",
     "matplotlib>=3.10.8",
+    "questionary>=2.0.0",
+    "rich>=13.0.0",
 ]
 
 [[tool.uv.index]]
