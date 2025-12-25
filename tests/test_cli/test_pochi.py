@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from pochi import create_optimizer, create_scheduler, load_config
+from pochi import create_optimizer, create_scheduler
+from pochisegmentation.exceptions import ConfigFileNotFoundError
+from pochisegmentation.utils.config_loader import ConfigLoader
 
 
 class TestLoadConfig:
-    """load_configのテストクラス."""
+    """ConfigLoaderのテストクラス (pochi.py用)."""
 
     def test_load_config_success(self) -> None:
         """設定ファイルの読み込み成功テスト."""
@@ -17,6 +19,7 @@ class TestLoadConfig:
             config_path = Path(tmpdir) / "config.py"
             config_path.write_text(
                 """
+data_root = "data/train"
 architecture = "Unet"
 encoder_name = "resnet34"
 num_classes = 4
@@ -24,7 +27,7 @@ learning_rate = 0.001
 """
             )
 
-            config = load_config(str(config_path))
+            config = ConfigLoader.load(str(config_path))
 
             assert config["architecture"] == "Unet"
             assert config["encoder_name"] == "resnet34"
@@ -33,8 +36,8 @@ learning_rate = 0.001
 
     def test_load_config_not_found(self) -> None:
         """存在しない設定ファイルのテスト."""
-        with pytest.raises(FileNotFoundError, match="設定ファイルが見つかりません"):
-            load_config("nonexistent.py")
+        with pytest.raises(ConfigFileNotFoundError):
+            ConfigLoader.load("nonexistent.py")
 
 
 class TestCreateOptimizer:
