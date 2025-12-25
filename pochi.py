@@ -3,18 +3,21 @@ r"""pochisegmentation CLIエントリーポイント.
 セグメンテーションモデルの訓練と推論を行うCLIツール.
 
 Usage:
-    # 訓練
-    python pochi.py seg-train --config configs/pochi_seg_config.py
+    # 対話型訓練 (推奨)
+    python pochi.py train
+
+    # 設定ファイル指定訓練
+    python pochi.py train --config configs/pochi_seg_config.py
 
     # 推論
-    python pochi.py seg-infer --model-path work_dirs/xxx/models/best.pth \
+    python pochi.py infer --model-path work_dirs/xxx/models/best.pth \
         --data data/test/images --output results/
 """
 
 import argparse
 import sys
 
-from pochisegmentation.cli import seg_infer, seg_train
+from pochisegmentation.cli import interactive_train, seg_infer, seg_train
 
 
 def main() -> None:
@@ -25,17 +28,17 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command", help="サブコマンド")
 
-    # seg-train サブコマンド
-    train_parser = subparsers.add_parser("seg-train", help="セグメンテーション訓練")
+    # train サブコマンド (対話型モードをデフォルトに)
+    train_parser = subparsers.add_parser("train", help="セグメンテーション訓練")
     train_parser.add_argument(
         "--config",
         type=str,
-        required=True,
-        help="設定ファイルのパス",
+        default=None,
+        help="設定ファイルのパス (省略時は対話モード)",
     )
 
-    # seg-infer サブコマンド
-    infer_parser = subparsers.add_parser("seg-infer", help="セグメンテーション推論")
+    # infer サブコマンド
+    infer_parser = subparsers.add_parser("infer", help="セグメンテーション推論")
     infer_parser.add_argument(
         "--model-path",
         type=str,
@@ -63,9 +66,14 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "seg-train":
-        seg_train(args)
-    elif args.command == "seg-infer":
+    if args.command == "train":
+        if args.config:
+            # 設定ファイル指定モード
+            seg_train(args)
+        else:
+            # 対話モード
+            interactive_train()
+    elif args.command == "infer":
         seg_infer(args)
     else:
         parser.print_help()
