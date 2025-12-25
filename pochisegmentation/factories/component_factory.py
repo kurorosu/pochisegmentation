@@ -2,9 +2,13 @@
 
 from typing import Any, Callable
 
+import torch
+from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepLR
+
 from pochisegmentation.interfaces.loss import ISegmentationLoss
 from pochisegmentation.interfaces.metrics import ISegmentationMetrics
 from pochisegmentation.interfaces.model import ISegmentationModel
+from pochisegmentation.utils.layer_wise_lr import create_layer_wise_param_groups
 
 # ファクトリー関数の型エイリアス
 ModelFactory = Callable[..., ISegmentationModel]
@@ -172,3 +176,68 @@ class ComponentFactory:
         cls._model_registry.clear()
         cls._loss_registry.clear()
         cls._metrics_registry.clear()
+
+    @classmethod
+    def create_optimizer(
+        cls, model: torch.nn.Module, config: dict[str, Any]
+    ) -> torch.optim.Optimizer:
+        """オプティマイザを作成.
+
+        Args:
+            model: モデル.
+            config: 設定辞書.
+
+        Returns:
+            オプティマイザ.
+        """
+        # 層別学習率
+        if config.get("enable_layer_wise_lr", False):
+            param_groups = create_layer_wise_param_groups(
+                model,  # type: ignore
+                encoder_lr=config.get("encoder_lr", 1e-4),
+                decoder_lr=config.get("decoder_lr", 1e-3),
+            )
+            # 層別学習率の場合, lrはparam_groupsで設定済み
+            lr = config.get("decoder_lr", 1e-3)
+        else:
+            param_groups = model.parameters()  # type: ignore
+            lr = config.get("learning_rate", 1e-3)
+
+        optimizer_name = config.get("optimizer", "AdamW")
+
+        if optimizer_name == "Adam":
+            return torch.optim.Adam(param_groups, lr=lr)
+        elif optimizer_name == "AdamW":
+            return torch.optim.AdamW(param_groups, lr=lr)
+        elif optimizer_name == "SGD":
+            return torch.optim.SGD(param_groups, lr=lr, momentum=0.9)
+        else:
+            raise ValueError(f"Unknown optimizer: {optimizer_name}")
+
+    @classmethod
+    def create_scheduler(
+        cls, optimizer: torch.optim.Optimizer, config: dict[str, Any]
+    ) -> torch.optim.lr_scheduler.LRScheduler | None:
+        """スケジューラを作成.
+
+        Args:
+            optimizer: オプティマイザ.
+            config: 設定辞書.
+
+        Returns:
+            スケジューラ, 設定がない場合はNone.
+        """
+        scheduler_name = config.get("scheduler")
+        if scheduler_name is None:
+            return None
+
+        scheduler_params = config.get("scheduler_params", {})
+
+        if scheduler_name == "CosineAnnealingLR":
+            return CosineAnnealingLR(optimizer, **scheduler_params)
+        elif scheduler_name == "StepLR":
+            return StepLR(optimizer, **scheduler_params)
+        elif scheduler_name == "ReduceLROnPlateau":
+            return ReduceLROnPlateau(optimizer, **scheduler_params)
+        else:
+            raise ValueError(f"Unknown scheduler: {scheduler_name}")
