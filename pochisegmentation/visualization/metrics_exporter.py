@@ -453,3 +453,214 @@ class TrainingMetricsExporter:
                 summary["best_val_accuracy_epoch"] = best_val["epoch"]
 
         return summary
+
+
+class SegmentationMetricsExporter:
+    """セグメンテーション訓練メトリクス用エクスポータ.
+
+    Trainerから分離された可視化ロジックを提供.
+    訓練履歴 (loss, mIoU, Dice, learning_rate) をCSVとグラフに出力.
+
+    Args:
+        output_dir (Path): 出力ディレクトリ.
+        logger (logging.Logger, optional): ロガーインスタンス.
+    """
+
+    def __init__(
+        self,
+        output_dir: Path,
+        logger: Optional[logging.Logger] = None,
+    ):
+        """SegmentationMetricsExporterを初期化."""
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        if logger is None:
+            self.logger = logging.getLogger(__name__)
+        else:
+            self.logger = logger
+
+    def export_history(self, history: Dict[str, List[float]]) -> Path:
+        """訓練履歴をCSVに出力.
+
+        Args:
+            history: 訓練履歴辞書. キー: train_loss, val_miou, val_dice, learning_rate.
+
+        Returns:
+            Path: 出力されたCSVファイルのパス.
+        """
+        csv_path = self.output_dir / "training_history.csv"
+        epochs = len(history.get("train_loss", []))
+
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                ["epoch", "learning_rate", "train_loss", "val_miou", "val_dice"]
+            )
+            for i in range(epochs):
+                writer.writerow(
+                    [
+                        i + 1,
+                        (
+                            history["learning_rate"][i]
+                            if history.get("learning_rate")
+                            else ""
+                        ),
+                        history["train_loss"][i] if history.get("train_loss") else "",
+                        history["val_miou"][i] if history.get("val_miou") else "",
+                        history["val_dice"][i] if history.get("val_dice") else "",
+                    ]
+                )
+
+        self.logger.info(f"訓練履歴をCSVに保存: {csv_path}")
+        return csv_path
+
+    def generate_graphs(self, history: Dict[str, List[float]]) -> List[Path]:
+        """訓練グラフを生成.
+
+        Args:
+            history: 訓練履歴辞書.
+
+        Returns:
+            List[Path]: 生成されたグラフファイルのパスリスト.
+        """
+        output_paths: List[Path] = []
+        epochs = range(1, len(history.get("train_loss", [])) + 1)
+
+        if not epochs:
+            self.logger.warning("訓練履歴が空のためグラフを生成できません")
+            return output_paths
+
+        # 1. 損失グラフ
+        loss_path = self._generate_loss_graph(history, epochs)
+        output_paths.append(loss_path)
+
+        # 2. mIoU/Diceグラフ (検証データがある場合)
+        if history.get("val_miou"):
+            metrics_path = self._generate_metrics_graph(history, epochs)
+            output_paths.append(metrics_path)
+
+        # 3. 学習率グラフ
+        if history.get("learning_rate"):
+            lr_path = self._generate_lr_graph(history, epochs)
+            output_paths.append(lr_path)
+
+        return output_paths
+
+    def _generate_loss_graph(
+        self, history: Dict[str, List[float]], epochs: range
+    ) -> Path:
+        """損失グラフを生成.
+
+        Args:
+            history: 訓練履歴辞書.
+            epochs: エポック範囲.
+
+        Returns:
+            Path: 生成されたグラフファイルのパス.
+        """
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(epochs, history["train_loss"], "b-", linewidth=2, label="Train Loss")
+        ax.set_xlabel("Epoch", fontsize=12)
+        ax.set_ylabel("Loss", fontsize=12)
+        ax.set_title("Training Loss", fontsize=14, fontweight="bold")
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="upper right")
+        plt.tight_layout()
+
+        loss_path = self.output_dir / "loss.png"
+        plt.savefig(loss_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+        self.logger.info(f"損失グラフを保存: {loss_path}")
+        return loss_path
+
+    def _generate_metrics_graph(
+        self, history: Dict[str, List[float]], epochs: range
+    ) -> Path:
+        """mIoU/Diceグラフを生成.
+
+        Args:
+            history: 訓練履歴辞書.
+            epochs: エポック範囲.
+
+        Returns:
+            Path: 生成されたグラフファイルのパス.
+        """
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(
+            epochs,
+            history["val_miou"],
+            "g-",
+            linewidth=2,
+            label="Val mIoU",
+        )
+        ax.plot(
+            epochs,
+            history["val_dice"],
+            "r-",
+            linewidth=2,
+            label="Val Dice",
+        )
+        ax.set_xlabel("Epoch", fontsize=12)
+        ax.set_ylabel("Score", fontsize=12)
+        ax.set_title("Validation Metrics", fontsize=14, fontweight="bold")
+        ax.set_ylim(0, 1)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="lower right")
+        plt.tight_layout()
+
+        metrics_path = self.output_dir / "metrics.png"
+        plt.savefig(metrics_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+        self.logger.info(f"メトリクスグラフを保存: {metrics_path}")
+        return metrics_path
+
+    def _generate_lr_graph(
+        self, history: Dict[str, List[float]], epochs: range
+    ) -> Path:
+        """学習率グラフを生成.
+
+        Args:
+            history: 訓練履歴辞書.
+            epochs: エポック範囲.
+
+        Returns:
+            Path: 生成されたグラフファイルのパス.
+        """
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(
+            epochs,
+            history["learning_rate"],
+            "m-",
+            linewidth=2,
+            label="Learning Rate",
+        )
+        ax.set_xlabel("Epoch", fontsize=12)
+        ax.set_ylabel("Learning Rate", fontsize=12)
+        ax.set_title("Learning Rate Schedule", fontsize=14, fontweight="bold")
+        ax.set_yscale("log")
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="upper right")
+        plt.tight_layout()
+
+        lr_path = self.output_dir / "learning_rate.png"
+        plt.savefig(lr_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+        self.logger.info(f"学習率グラフを保存: {lr_path}")
+        return lr_path
+
+    def export_all(self, history: Dict[str, List[float]]) -> tuple[Path, List[Path]]:
+        """CSVとグラフの両方をエクスポート.
+
+        Args:
+            history: 訓練履歴辞書.
+
+        Returns:
+            tuple[Path, List[Path]]: (CSVファイルパス, グラフファイルパスリスト).
+        """
+        csv_path = self.export_history(history)
+        graph_paths = self.generate_graphs(history)
+        return csv_path, graph_paths
