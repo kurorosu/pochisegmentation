@@ -11,10 +11,11 @@ from .mask_visualizer import (
     overlay_mask_on_image,
     save_mask_visualization,
 )
-from .metrics_exporter import TrainingMetricsExporter
+from .metrics_exporter import SegmentationMetricsExporter, TrainingMetricsExporter
 
 __all__ = [
     "TrainingMetricsExporter",
+    "SegmentationMetricsExporter",
     "GradientTracer",
     "colorize_mask",
     "colorize_mask_grayscale",
