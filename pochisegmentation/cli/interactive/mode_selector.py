@@ -34,11 +34,19 @@ def select_mode() -> str | None:
             title="推論 (Infer) - 学習済みモデルで推論する",
             value="infer",
         ),
+        questionary.Choice(
+            title="終了",
+            value="exit",
+        ),
     ]
 
     result: str | None = questionary.select(
         "実行モードを選択",
         choices=options,
     ).ask()
+
+    # 終了選択時は None を返す (キャンセルと同じ扱い)
+    if result == "exit":
+        return None
 
     return result
