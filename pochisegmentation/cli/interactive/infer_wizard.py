@@ -124,7 +124,7 @@ class InferWizard:
         self.console.print()
         self.console.print(
             Panel(
-                "対話型モードで推論を設定します",
+                "対話型モードで推論を設定します\n[dim]Ctrl+C でいつでもキャンセルできます[/dim]",
                 title="PochiSegmentation Inference",
                 border_style="green",
             )
