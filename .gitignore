@@ -217,5 +217,6 @@ tmp*.*
 data/*
 !data/.gitkeep
 work_dirs/*
+configs/work_dirs/*
 results/*
 *.bat

@@ -1,7 +1,6 @@
 """訓練設定の対話型ウィザード."""
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, cast
 
 import questionary
@@ -20,6 +19,7 @@ from configs.presets import (
     Choice,
     TrainingPreset,
 )
+from pochisegmentation.utils.config_saver import save_config_for_reuse
 
 
 @dataclass
@@ -476,20 +476,10 @@ class TrainWizard:
         Args:
             config: 保存する設定.
         """
-        # 保存先を質問
-        filename: str | None = questionary.text(
-            "保存ファイル名",
-            default="configs/my_config.py",
-        ).ask()
-
-        if filename is None:
-            self.console.print("[yellow]保存をキャンセルしました[/yellow]")
-            return
-
-        path = Path(filename)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
         content = config.to_python_config()
-        path.write_text(content, encoding="utf-8")
+        saved_path = save_config_for_reuse(content)
 
-        self.console.print(f"[green]設定を保存しました: {path}[/green]")
+        self.console.print(f"[green]設定を保存しました: {saved_path}[/green]")
+        self.console.print(
+            f"[cyan]再利用: python pochi.py train --config {saved_path}[/cyan]"
+        )
