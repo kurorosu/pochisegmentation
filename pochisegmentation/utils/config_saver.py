@@ -9,6 +9,7 @@ from .timestamp_utils import (
     find_next_index,
     format_workspace_name,
     get_current_date_str,
+    parse_timestamp_dir,
 )
 
 CONFIG_SAVE_BASE_DIR = Path("configs/work_dirs")
@@ -44,3 +45,64 @@ def save_config_for_reuse(config_content: str) -> Path:
     config_path.write_text(config_content, encoding="utf-8")
 
     return config_path
+
+
+def get_saved_configs() -> list[Path]:
+    """保存済み設定ファイルの一覧を取得.
+
+    Returns:
+        保存済み設定ファイルのパスリスト (新しい順).
+    """
+    if not CONFIG_SAVE_BASE_DIR.exists():
+        return []
+
+    configs: list[tuple[str, int, Path]] = []
+
+    for item in CONFIG_SAVE_BASE_DIR.iterdir():
+        if item.is_dir():
+            config_file = item / "saved_config.py"
+            if config_file.exists():
+                try:
+                    date_str, index = parse_timestamp_dir(item.name)
+                    configs.append((date_str, index, config_file))
+                except ValueError:
+                    # 形式が合わないディレクトリは無視
+                    continue
+
+    # 日付とインデックスで降順ソート（新しい順）
+    configs.sort(key=lambda x: (x[0], x[1]), reverse=True)
+
+    return [config_path for _, _, config_path in configs]
+
+
+WORK_DIRS_BASE = Path("work_dirs")
+
+
+def get_training_configs() -> list[Path]:
+    """過去の訓練設定ファイルの一覧を取得.
+
+    work_dirs/yyyymmdd_{idx}/config.py 形式のファイルを検索.
+
+    Returns:
+        訓練設定ファイルのパスリスト (新しい順).
+    """
+    if not WORK_DIRS_BASE.exists():
+        return []
+
+    configs: list[tuple[str, int, Path]] = []
+
+    for item in WORK_DIRS_BASE.iterdir():
+        if item.is_dir():
+            config_file = item / "config.py"
+            if config_file.exists():
+                try:
+                    date_str, index = parse_timestamp_dir(item.name)
+                    configs.append((date_str, index, config_file))
+                except ValueError:
+                    # 形式が合わないディレクトリは無視
+                    continue
+
+    # 日付とインデックスで降順ソート（新しい順）
+    configs.sort(key=lambda x: (x[0], x[1]), reverse=True)
+
+    return [config_path for _, _, config_path in configs]
