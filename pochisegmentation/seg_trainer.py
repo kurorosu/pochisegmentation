@@ -48,6 +48,7 @@ class PochiSegmentationTrainer:
         device: str = "cuda",
         config: dict[str, Any] | None = None,
         workspace_manager: PochiWorkspaceManager | None = None,
+        early_stopping_patience: int | None = None,
     ) -> None:
         """PochiSegmentationTrainerを初期化.
 
@@ -60,6 +61,7 @@ class PochiSegmentationTrainer:
             device: 使用デバイス ("cuda" or "cpu").
             config: 設定辞書 (オプション).
             workspace_manager: ワークスペースマネージャ (オプション).
+            early_stopping_patience: Early Stopping の patience (None または 0 で無効).
         """
         self._model = model.to(device)
         self._criterion = criterion
@@ -69,6 +71,7 @@ class PochiSegmentationTrainer:
         self._device = device
         self._config = config or {}
         self._workspace_manager = workspace_manager
+        self._early_stopping_patience = early_stopping_patience or 0
 
         # ベストスコア管理
         self._best_miou = 0.0
@@ -104,6 +107,12 @@ class PochiSegmentationTrainer:
         }
 
         self._logger.info(f"訓練開始: {epochs} エポック")
+        if self._early_stopping_patience > 0:
+            self._logger.info(
+                f"Early Stopping: {self._early_stopping_patience} エポック改善なしで停止"
+            )
+
+        no_improvement_count = 0
 
         for epoch in range(epochs):
             # 停止フラグのチェック（エポック開始前）
@@ -141,8 +150,23 @@ class PochiSegmentationTrainer:
                     f"Dice: {val_metrics.get('Dice', 0.0):.4f}"
                 )
 
-                # ベストモデルの保存
-                self._save_best_model(val_metrics, epoch)
+                # ベストモデルの保存と改善チェック
+                improved = self._save_best_model(val_metrics, epoch)
+                if improved:
+                    no_improvement_count = 0
+                else:
+                    no_improvement_count += 1
+
+                # Early Stopping チェック
+                if (
+                    self._early_stopping_patience > 0
+                    and no_improvement_count >= self._early_stopping_patience
+                ):
+                    self._logger.info(
+                        f"Early Stopping: {no_improvement_count} エポック改善なし, "
+                        f"訓練を終了します"
+                    )
+                    break
 
             # スケジューラ更新
             if self._scheduler is not None:
@@ -248,12 +272,15 @@ class PochiSegmentationTrainer:
 
         return self._metrics.compute()
 
-    def _save_best_model(self, metrics: dict[str, float], epoch: int) -> None:
+    def _save_best_model(self, metrics: dict[str, float], epoch: int) -> bool:
         """ベストモデルを保存.
 
         Args:
             metrics: 評価指標の辞書.
             epoch: 現在のエポック.
+
+        Returns:
+            True if improved, False otherwise.
         """
         miou = metrics.get("mIoU", 0.0)
         if miou > self._best_miou:
@@ -265,6 +292,8 @@ class PochiSegmentationTrainer:
                 model_path = models_dir / "best.pth"
                 self._save_checkpoint(model_path, epoch, metrics)
                 self._logger.info(f"ベストモデルを保存: {model_path}")
+            return True
+        return False
 
     def _save_checkpoint(
         self, path: Path, epoch: int, metrics: dict[str, float]
