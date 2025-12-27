@@ -1,10 +1,13 @@
 """セグメンテーション評価指標の実装."""
 
+from typing import Any
+
 import torch
 from torchmetrics import Accuracy, F1Score
 from torchmetrics.segmentation import DiceScore, MeanIoU
 
 from pochisegmentation.interfaces.metrics import ISegmentationMetrics
+from pochisegmentation.metrics.class_metrics import ClassMetrics
 
 
 class SegmentationMetrics(ISegmentationMetrics):
@@ -14,21 +17,30 @@ class SegmentationMetrics(ISegmentationMetrics):
 
     Attributes:
         _num_classes: クラス数.
+        _class_names: クラス名リスト.
         _device: 計算デバイス.
         _iou: MeanIoUメトリクス.
         _dice: DiceScoreメトリクス.
         _pixel_accuracy: PixelAccuracyメトリクス.
         _f1: F1スコアメトリクス.
+        _class_metrics: クラス別精度メトリクス.
     """
 
-    def __init__(self, num_classes: int, device: str = "cuda") -> None:
+    def __init__(
+        self,
+        num_classes: int,
+        class_names: list[str] | None = None,
+        device: str = "cuda",
+    ) -> None:
         """評価指標を初期化.
 
         Args:
             num_classes: クラス数.
+            class_names: クラス名リスト (None の場合は "class_0", "class_1", ...).
             device: 計算デバイス ("cuda" or "cpu").
         """
         self._num_classes = num_classes
+        self._class_names = class_names
         self._device = device
 
         self._iou = MeanIoU(num_classes=num_classes).to(device)
@@ -39,6 +51,9 @@ class SegmentationMetrics(ISegmentationMetrics):
         self._f1 = F1Score(
             task="multiclass", num_classes=num_classes, average="macro"
         ).to(device)
+
+        # クラス別精度
+        self._class_metrics = ClassMetrics(num_classes, class_names, device)
 
     def update(self, preds: torch.Tensor, targets: torch.Tensor) -> None:
         """バッチ結果を蓄積.
@@ -51,6 +66,7 @@ class SegmentationMetrics(ISegmentationMetrics):
         self._dice.update(preds, targets)
         self._pixel_accuracy.update(preds.flatten(), targets.flatten())
         self._f1.update(preds.flatten(), targets.flatten())
+        self._class_metrics.update(preds, targets)
 
     def compute(self) -> dict[str, float]:
         """蓄積した結果から指標を計算.
@@ -71,3 +87,12 @@ class SegmentationMetrics(ISegmentationMetrics):
         self._dice.reset()
         self._pixel_accuracy.reset()
         self._f1.reset()
+        self._class_metrics.reset()
+
+    def compute_class_metrics(self) -> dict[str, Any]:
+        """クラス別精度を計算.
+
+        Returns:
+            クラス別精度の辞書.
+        """
+        return self._class_metrics.compute()
