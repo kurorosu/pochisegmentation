@@ -173,6 +173,7 @@ def run_training(
         device=device,
         config=config,
         workspace_manager=workspace_manager,
+        early_stopping_patience=config.get("early_stopping_patience"),
     )
 
     # 訓練実行

@@ -65,6 +65,7 @@ class TrainConfig:
     device: str = "cuda"
     work_dir: str = "work_dirs"
     enable_layer_wise_lr: bool = True
+    early_stopping_patience: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """辞書形式に変換."""
@@ -91,6 +92,7 @@ class TrainConfig:
             "enable_layer_wise_lr": self.enable_layer_wise_lr,
             "encoder_lr": self.learning_rate * 0.1,
             "decoder_lr": self.learning_rate,
+            "early_stopping_patience": self.early_stopping_patience,
         }
 
     def to_python_config(self) -> str:
@@ -139,6 +141,9 @@ class TrainConfig:
                 f"enable_layer_wise_lr = {self.enable_layer_wise_lr}",
                 f"encoder_lr = {self.learning_rate * 0.1}",
                 f"decoder_lr = {self.learning_rate}",
+                "",
+                "# Early Stopping",
+                f"early_stopping_patience = {self.early_stopping_patience}",
                 "",
                 "# ワークスペース設定",
                 f'work_dir = "{self.work_dir}"',
@@ -225,6 +230,9 @@ class TrainWizard:
 
         scheduler = self._ask_scheduler()
 
+        # Early Stopping (ReduceLROnPlateau 以外で推奨)
+        early_stopping_patience = self._ask_early_stopping(scheduler)
+
         config = TrainConfig(
             data_root=data_root,
             num_classes=num_classes,
@@ -237,6 +245,7 @@ class TrainWizard:
             batch_size=batch_size,
             learning_rate=learning_rate,
             image_size=image_size,
+            early_stopping_patience=early_stopping_patience,
         )
 
         # 確認
@@ -443,6 +452,63 @@ class TrainWizard:
 
         return result
 
+    def _ask_early_stopping(self, scheduler: str | None) -> int | None:
+        """Early Stopping の patience を質問.
+
+        ReduceLROnPlateau の場合は推奨せず, それ以外は推奨.
+
+        Args:
+            scheduler: 選択されたスケジューラ.
+
+        Returns:
+            patience 値, または None (無効).
+        """
+        # ReduceLROnPlateau は停滞時にLRを減衰させるので, Early Stopping は不要な場合が多い
+        if scheduler == "ReduceLROnPlateau":
+            description = "停滞時にLR減衰があるため, 通常は不要"
+            default_choice = "none"
+        else:
+            description = "改善がなければ訓練を終了 - 推奨"
+            default_choice = "10"
+
+        options = [
+            questionary.Choice(
+                title=(
+                    f"10 エポック - {description}"
+                    if default_choice == "10"
+                    else "10 エポック"
+                ),
+                value="10",
+            ),
+            questionary.Choice(
+                title="5 エポック",
+                value="5",
+            ),
+            questionary.Choice(
+                title="20 エポック",
+                value="20",
+            ),
+            questionary.Choice(
+                title=(
+                    f"None - 無効 ({description})"
+                    if default_choice == "none"
+                    else "None - 無効"
+                ),
+                value="none",
+            ),
+        ]
+
+        result: str | None = questionary.select(
+            "Early Stopping (patience)",
+            choices=options,
+            default=default_choice,
+        ).ask()
+
+        if result is None or result == "none":
+            return None
+
+        return int(result)
+
     def _confirm(self, config: TrainConfig) -> str | None:
         """設定確認画面を表示.
 
@@ -470,6 +536,12 @@ class TrainWizard:
         table.add_row("バッチサイズ", str(config.batch_size))
         table.add_row("学習率", str(config.learning_rate))
         table.add_row("画像サイズ", str(config.image_size))
+        early_stopping_str = (
+            f"{config.early_stopping_patience} エポック"
+            if config.early_stopping_patience
+            else "無効"
+        )
+        table.add_row("Early Stopping", early_stopping_str)
 
         self.console.print(table)
         self.console.print()
