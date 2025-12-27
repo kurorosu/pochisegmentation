@@ -121,9 +121,13 @@ class PochiSegmentationTrainer:
             train_loss = self._train_epoch(train_loader)
             history["train_loss"].append(train_loss)
 
+            # 学習率と損失関数名を取得
+            lr_str = self._format_learning_rates()
+            loss_name = self._criterion.__class__.__name__
+
             self._logger.info(
                 f"Epoch {epoch + 1}/{epochs} - "
-                f"LR: {current_lr:.6f}, Train Loss: {train_loss:.4f}"
+                f"{lr_str}, Train Loss ({loss_name}): {train_loss:.4f}"
             )
 
             # 検証フェーズ
@@ -162,6 +166,25 @@ class PochiSegmentationTrainer:
         self._save_training_history(history)
 
         return history
+
+    def _format_learning_rates(self) -> str:
+        """学習率を表示用にフォーマット.
+
+        層別学習率が有効な場合は encoder/decoder の両方を表示.
+
+        Returns:
+            フォーマットされた学習率文字列.
+        """
+        param_groups = self._optimizer.param_groups
+        if len(param_groups) >= 2:
+            # 層別学習率: encoder (group 0), decoder (group 1)
+            enc_lr = param_groups[0]["lr"]
+            dec_lr = param_groups[1]["lr"]
+            return f"LR: enc={enc_lr:.6f}, dec={dec_lr:.6f}"
+        else:
+            # 単一学習率
+            lr = param_groups[0]["lr"]
+            return f"LR: {lr:.6f}"
 
     def _train_epoch(
         self, loader: DataLoader[tuple[torch.Tensor, torch.Tensor]]
