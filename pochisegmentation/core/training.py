@@ -4,6 +4,7 @@
 CLIの入力方法（ファイル/対話）には依存しない.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -75,7 +76,9 @@ def create_dataloaders(
 
     # DataLoader作成
     batch_size = config.get("batch_size", 16)
-    num_workers = config.get("num_workers", 4)
+    # num_workers=0 は必須: Ctrl+C による安全停止を有効にするため.
+    # マルチプロセスワーカー使用時、シグナルがワーカーに伝播しクラッシュする.
+    num_workers = 0
 
     train_loader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = DataLoader(
         train_dataset,
@@ -99,6 +102,7 @@ def run_training(
     config: dict[str, Any],
     config_path: Path | None = None,
     config_content: str | None = None,
+    stop_flag_callback: Callable[[], bool] | None = None,
 ) -> None:
     """訓練を実行.
 
@@ -106,6 +110,7 @@ def run_training(
         config: 設定辞書.
         config_path: 元の設定ファイルパス (ファイル指定時).
         config_content: 設定ファイルの内容 (対話時, Python形式の文字列).
+        stop_flag_callback: 停止フラグをチェックするコールバック関数.
     """
     logger = LoggerManager().get_logger("pochi")
 
@@ -173,10 +178,12 @@ def run_training(
     # 訓練実行
     epochs = config.get("epochs", 100)
     logger.info(f"訓練開始: {epochs} エポック")
-    trainer.train(train_loader, val_loader, epochs=epochs)
-
-    # 最終モデル保存
-    trainer.save_last_model()
+    trainer.train(
+        train_loader,
+        val_loader,
+        epochs=epochs,
+        stop_flag_callback=stop_flag_callback,
+    )
 
     logger.info("訓練完了!")
     logger.info(f"結果: {workspace_path}")

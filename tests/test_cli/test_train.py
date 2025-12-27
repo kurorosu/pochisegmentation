@@ -118,7 +118,7 @@ device = "cpu"
         mock_component_factory.create_loss.assert_called_once()
         mock_component_factory.create_metrics.assert_called_once()
         mock_trainer_instance.train.assert_called_once()
-        mock_trainer_instance.save_last_model.assert_called_once()
+        # save_last_model は trainer.train() 内で毎エポック呼ばれるようになった
 
     @patch("pochisegmentation.core.training.torch.cuda.is_available")
     @patch("pochisegmentation.core.training.PochiSegmentationTrainer")
