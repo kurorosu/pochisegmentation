@@ -117,7 +117,9 @@ class ComponentFactory:
         return cls._loss_registry[loss_name](**loss_params)
 
     @classmethod
-    def create_metrics(cls, config: dict[str, Any]) -> ISegmentationMetrics:
+    def create_metrics(
+        cls, config: dict[str, Any], class_names: list[str] | None = None
+    ) -> ISegmentationMetrics:
         """設定から評価指標を生成.
 
         Args:
@@ -125,6 +127,7 @@ class ComponentFactory:
                 - metrics: 評価指標名 (デフォルト: "SegmentationMetrics").
                 - num_classes: クラス数 (必須).
                 - device: 計算デバイス (デフォルト: "cuda").
+            class_names: クラス名リスト (オプション).
 
         Returns:
             生成された評価指標インスタンス.
@@ -140,6 +143,7 @@ class ComponentFactory:
 
         return cls._metrics_registry[metrics_name](
             num_classes=config["num_classes"],
+            class_names=class_names,
             device=config.get("device", "cuda"),
         )
 
