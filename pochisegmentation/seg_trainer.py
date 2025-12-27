@@ -11,7 +11,7 @@ from typing import Any
 import torch
 from torch import nn
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
 from pochisegmentation.interfaces.loss import ISegmentationLoss
@@ -146,7 +146,12 @@ class PochiSegmentationTrainer:
 
             # スケジューラ更新
             if self._scheduler is not None:
-                self._scheduler.step()
+                if isinstance(self._scheduler, ReduceLROnPlateau):
+                    # ReduceLROnPlateau は監視する指標を渡す必要がある
+                    val_miou = val_metrics.get("mIoU", 0.0) if val_loader else 0.0
+                    self._scheduler.step(val_miou)
+                else:
+                    self._scheduler.step()
 
             # ラストモデルの保存（毎エポック上書き）
             self.save_last_model()
