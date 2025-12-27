@@ -6,6 +6,7 @@ pochi.py から呼び出される薄いアダプター層.
 
 import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -23,13 +24,17 @@ BACK_SENTINEL = object()
 EXIT_SENTINEL = object()
 
 
-def train_command(args: argparse.Namespace) -> None:
+def train_command(
+    args: argparse.Namespace,
+    stop_flag_callback: Callable[[], bool] | None = None,
+) -> None:
     """訓練コマンド.
 
     --config 必須. 対話モードは python pochi.py から.
 
     Args:
         args: コマンドライン引数.
+        stop_flag_callback: 停止フラグをチェックするコールバック関数.
     """
     logger = LoggerManager().get_logger("pochi")
 
@@ -45,7 +50,11 @@ def train_command(args: argparse.Namespace) -> None:
         logger.error(f"設定エラー: {e}")
         sys.exit(1)
 
-    run_training(config, config_path=Path(args.config))
+    run_training(
+        config,
+        config_path=Path(args.config),
+        stop_flag_callback=stop_flag_callback,
+    )
 
 
 def infer_command(args: argparse.Namespace) -> None:
@@ -146,11 +155,16 @@ def _select_config_file(configs: list[Path], title: str) -> Path | object | None
     return result
 
 
-def interactive_main() -> None:
+def interactive_main(
+    stop_flag_callback: Callable[[], bool] | None = None,
+) -> None:
     """対話モードのエントリーポイント.
 
     サブコマンドなしで起動された場合に呼び出される.
     訓練/推論の選択を行い、対応する対話フローを実行.
+
+    Args:
+        stop_flag_callback: 停止フラグをチェックするコールバック関数.
     """
     from pochisegmentation.cli.interactive.infer_wizard import InferWizard
     from pochisegmentation.cli.interactive.mode_selector import select_mode
@@ -191,7 +205,11 @@ def interactive_main() -> None:
                         logger.error(f"設定エラー: {e}")
                         sys.exit(1)
 
-                    run_training(config, config_path=config_path)
+                    run_training(
+                        config,
+                        config_path=config_path,
+                        stop_flag_callback=stop_flag_callback,
+                    )
                     return
 
                 elif train_mode == "training":
@@ -213,7 +231,11 @@ def interactive_main() -> None:
                         logger.error(f"設定エラー: {e}")
                         sys.exit(1)
 
-                    run_training(config, config_path=config_path)
+                    run_training(
+                        config,
+                        config_path=config_path,
+                        stop_flag_callback=stop_flag_callback,
+                    )
                     return
 
                 else:
@@ -227,7 +249,11 @@ def interactive_main() -> None:
 
                     config = result.to_dict()
                     config_content = result.to_python_config()
-                    run_training(config, config_content=config_content)
+                    run_training(
+                        config,
+                        config_content=config_content,
+                        stop_flag_callback=stop_flag_callback,
+                    )
                     return
 
         elif mode == "infer":

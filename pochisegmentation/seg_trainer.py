@@ -4,6 +4,7 @@ DIP (依存性逆転原則) に基づき, 具象クラスではなくインタ�
 DI (依存性注入) により, コンストラクタで依存性を注入.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -82,6 +83,7 @@ class PochiSegmentationTrainer:
         train_loader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
         val_loader: DataLoader[tuple[torch.Tensor, torch.Tensor]] | None = None,
         epochs: int = 50,
+        stop_flag_callback: Callable[[], bool] | None = None,
     ) -> dict[str, list[float]]:
         """訓練ループを実行.
 
@@ -89,6 +91,7 @@ class PochiSegmentationTrainer:
             train_loader: 訓練データローダー.
             val_loader: 検証データローダー (オプション).
             epochs: エポック数.
+            stop_flag_callback: 停止フラグをチェックするコールバック関数.
 
         Returns:
             訓練履歴 (損失と評価指標).
@@ -103,6 +106,13 @@ class PochiSegmentationTrainer:
         self._logger.info(f"訓練開始: {epochs} エポック")
 
         for epoch in range(epochs):
+            # 停止フラグのチェック（エポック開始前）
+            if stop_flag_callback and stop_flag_callback():
+                self._logger.warning(
+                    f"安全停止が要求されました。エポック {epoch} で訓練を終了します。"
+                )
+                break
+
             # 現在の学習率を記録
             current_lr = self._optimizer.param_groups[0]["lr"]
             history["learning_rate"].append(current_lr)
@@ -133,6 +143,16 @@ class PochiSegmentationTrainer:
             # スケジューラ更新
             if self._scheduler is not None:
                 self._scheduler.step()
+
+            # ラストモデルの保存（毎エポック上書き）
+            self.save_last_model()
+
+            # 停止フラグのチェック（エポック完了後）
+            if stop_flag_callback and stop_flag_callback():
+                self._logger.warning(
+                    f"安全停止が要求されました。エポック {epoch + 1} で訓練を終了します。"
+                )
+                break
 
         self._logger.info(
             f"訓練完了. Best mIoU: {self._best_miou:.4f} (Epoch {self._best_epoch + 1})"
