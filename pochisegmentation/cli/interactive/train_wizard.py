@@ -66,6 +66,7 @@ class TrainConfig:
     work_dir: str = "work_dirs"
     enable_layer_wise_lr: bool = True
     early_stopping_patience: int | None = None
+    enable_amp: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """辞書形式に変換."""
@@ -93,6 +94,7 @@ class TrainConfig:
             "encoder_lr": self.learning_rate * 0.1,
             "decoder_lr": self.learning_rate,
             "early_stopping_patience": self.early_stopping_patience,
+            "enable_amp": self.enable_amp,
         }
 
     def to_python_config(self) -> str:
@@ -144,6 +146,9 @@ class TrainConfig:
                 "",
                 "# Early Stopping",
                 f"early_stopping_patience = {self.early_stopping_patience}",
+                "",
+                "# AMP (Automatic Mixed Precision)",
+                f"enable_amp = {self.enable_amp}",
                 "",
                 "# ワークスペース設定",
                 f'work_dir = "{self.work_dir}"',
@@ -233,6 +238,9 @@ class TrainWizard:
         # Early Stopping (ReduceLROnPlateau 以外で推奨)
         early_stopping_patience = self._ask_early_stopping(scheduler)
 
+        # AMP (混合精度訓練)
+        enable_amp = self._ask_amp()
+
         config = TrainConfig(
             data_root=data_root,
             num_classes=num_classes,
@@ -246,6 +254,7 @@ class TrainWizard:
             learning_rate=learning_rate,
             image_size=image_size,
             early_stopping_patience=early_stopping_patience,
+            enable_amp=enable_amp,
         )
 
         # 確認
@@ -509,6 +518,31 @@ class TrainWizard:
 
         return int(result)
 
+    def _ask_amp(self) -> bool:
+        """AMP (混合精度訓練) を質問.
+
+        Returns:
+            AMP を有効化するかどうか.
+        """
+        options = [
+            questionary.Choice(
+                title="無効 (通常精度)",
+                value=False,
+            ),
+            questionary.Choice(
+                title="有効 (メモリ削減・高速化, CUDA専用)",
+                value=True,
+            ),
+        ]
+
+        result: bool | None = questionary.select(
+            "AMP (混合精度訓練)",
+            choices=options,
+            default=False,
+        ).ask()
+
+        return result if result is not None else False
+
     def _confirm(self, config: TrainConfig) -> str | None:
         """設定確認画面を表示.
 
@@ -542,6 +576,7 @@ class TrainWizard:
             else "無効"
         )
         table.add_row("Early Stopping", early_stopping_str)
+        table.add_row("AMP", "有効" if config.enable_amp else "無効")
 
         self.console.print(table)
         self.console.print()

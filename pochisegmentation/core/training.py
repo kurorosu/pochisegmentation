@@ -180,6 +180,7 @@ def run_training(
         config=config,
         workspace_manager=workspace_manager,
         early_stopping_patience=config.get("early_stopping_patience"),
+        enable_amp=config.get("enable_amp", False),
     )
 
     # 訓練実行
