@@ -22,6 +22,26 @@ from configs.presets import (
 from pochisegmentation.utils.config_saver import save_config_for_reuse
 
 
+def get_scheduler_params(scheduler: str | None, epochs: int) -> dict[str, Any]:
+    """スケジューラごとに適切なデフォルトパラメータを取得.
+
+    Args:
+        scheduler: スケジューラ名.
+        epochs: エポック数.
+
+    Returns:
+        スケジューラのパラメータ辞書.
+    """
+    if scheduler == "CosineAnnealingLR":
+        return {"T_max": epochs}
+    elif scheduler == "StepLR":
+        return {"step_size": max(1, epochs // 3)}
+    elif scheduler == "ReduceLROnPlateau":
+        return {"mode": "max", "patience": 5}
+    else:
+        return {}
+
+
 @dataclass
 class TrainConfig:
     """対話で収集した訓練設定."""
@@ -57,7 +77,7 @@ class TrainConfig:
             "loss_params": {"mode": "multiclass"},
             "optimizer": self.optimizer,
             "scheduler": self.scheduler,
-            "scheduler_params": {"T_max": self.epochs},
+            "scheduler_params": get_scheduler_params(self.scheduler, self.epochs),
             "epochs": self.epochs,
             "batch_size": self.batch_size,
             "learning_rate": self.learning_rate,
@@ -106,7 +126,8 @@ class TrainConfig:
 
         if self.scheduler:
             lines.append(f'scheduler = "{self.scheduler}"')
-            lines.append(f'scheduler_params = {{"T_max": {self.epochs}}}')
+            scheduler_params = get_scheduler_params(self.scheduler, self.epochs)
+            lines.append(f"scheduler_params = {scheduler_params}")
         else:
             lines.append("scheduler = None")
             lines.append("scheduler_params = {}")
