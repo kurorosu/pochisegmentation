@@ -9,27 +9,51 @@ from rich.panel import Panel
 from rich.table import Table
 
 
-def find_model_files(base_dir: str = "work_dirs") -> list[Path]:
-    """work_dirs からモデルファイルを検索.
+@dataclass
+class ModelInfo:
+    """モデルファイルと関連情報."""
+
+    model_path: Path
+    workspace_path: Path
+    val_paths_file: Path | None  # paths/val.txt
+    train_paths_file: Path | None  # paths/train.txt
+
+
+def find_model_files(base_dir: str = "work_dirs") -> list[ModelInfo]:
+    """work_dirs からモデルファイルと関連データパスを検索.
 
     Args:
         base_dir: 検索ベースディレクトリ.
 
     Returns:
-        見つかったモデルファイルのリスト.
+        見つかったモデル情報のリスト.
     """
     base_path = Path(base_dir)
     if not base_path.exists():
         return []
 
     # best.pth と last.pth を検索
-    model_files: list[Path] = []
+    model_infos: list[ModelInfo] = []
     for pth_file in base_path.glob("*/models/*.pth"):
-        model_files.append(pth_file)
+        # ワークスペースパス (work_dirs/EXP_NAME)
+        workspace_path = pth_file.parent.parent
+
+        # 関連データパスの検索
+        val_txt = workspace_path / "paths" / "val.txt"
+        train_txt = workspace_path / "paths" / "train.txt"
+
+        model_infos.append(
+            ModelInfo(
+                model_path=pth_file,
+                workspace_path=workspace_path,
+                val_paths_file=val_txt if val_txt.exists() else None,
+                train_paths_file=train_txt if train_txt.exists() else None,
+            )
+        )
 
     # 更新日時でソート (新しい順)
-    model_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return model_files
+    model_infos.sort(key=lambda m: m.model_path.stat().st_mtime, reverse=True)
+    return model_infos
 
 
 def count_images(data_path: Path) -> int:
@@ -88,12 +112,12 @@ class InferWizard:
         self._show_header()
 
         # Step 1: モデルファイル選択
-        model_path = self._ask_model_path()
-        if model_path is None:
+        model_info = self._ask_model_path()
+        if model_info is None:
             return None
 
         # Step 2: 入力データ選択
-        data_path = self._ask_data_path()
+        data_path = self._ask_data_path(model_info)
         if data_path is None:
             return None
 
@@ -108,7 +132,7 @@ class InferWizard:
             return None
 
         config = InferConfig(
-            model_path=model_path,
+            model_path=str(model_info.model_path),
             data_path=data_path,
             output_dir=output_dir,
             device=device,
@@ -131,27 +155,27 @@ class InferWizard:
         )
         self.console.print()
 
-    def _ask_model_path(self) -> str | None:
+    def _ask_model_path(self) -> ModelInfo | None:
         """モデルファイルを質問.
 
         Returns:
-            モデルファイルパス. キャンセル時は None.
+            モデル情報. キャンセル時は None.
         """
         # work_dirs からモデルファイルを検索
-        model_files = find_model_files()
+        model_infos = find_model_files()
 
-        if model_files:
+        if model_infos:
             # 選択肢を作成
             options = [
                 questionary.Choice(
-                    title=str(p),
-                    value=str(p),
+                    title=str(info.model_path),
+                    value=info,
                 )
-                for p in model_files[:10]  # 最大10件表示
+                for info in model_infos[:10]  # 最大10件表示
             ]
             options.append(questionary.Choice(title="[手動入力]", value="__manual__"))
 
-            result: str | None = questionary.select(
+            result: ModelInfo | str | None = questionary.select(
                 "モデルファイル",
                 choices=options,
             ).ask()
@@ -160,40 +184,98 @@ class InferWizard:
                 return None
 
             if result == "__manual__":
-                return self._ask_manual_path("モデルファイルのパス")
+                path_str = self._ask_manual_path("モデルファイルのパス")
+                if path_str is None:
+                    return None
+                return ModelInfo(
+                    model_path=Path(path_str),
+                    workspace_path=Path(path_str).parent.parent,
+                    val_paths_file=None,
+                    train_paths_file=None,
+                )
 
-            return result
+            # result は ModelInfo (選択肢から選ばれた場合)
+            if isinstance(result, ModelInfo):
+                return result
+            return None
         else:
             # モデルファイルが見つからない場合は手動入力
             self.console.print(
                 "[yellow]work_dirs にモデルファイルが見つかりません[/yellow]"
             )
-            return self._ask_manual_path("モデルファイルのパス")
+            path_str = self._ask_manual_path("モデルファイルのパス")
+            if path_str is None:
+                return None
+            return ModelInfo(
+                model_path=Path(path_str),
+                workspace_path=Path(path_str).parent.parent,
+                val_paths_file=None,
+                train_paths_file=None,
+            )
 
-    def _ask_data_path(self) -> str | None:
+    def _ask_data_path(self, model_info: ModelInfo) -> str | None:
         """入力データを質問.
+
+        モデルに紐づくデータがあれば優先表示.
+
+        Args:
+            model_info: 選択されたモデル情報.
 
         Returns:
             入力データパス. キャンセル時は None.
         """
-        options = [
-            questionary.Choice(
-                title="ディレクトリを指定",
-                value="__dir__",
-            ),
-            questionary.Choice(
-                title="単一ファイルを指定",
-                value="__file__",
-            ),
-            questionary.Choice(
-                title="パスリスト (.txt) を指定",
-                value="__txt__",
-            ),
-        ]
+        options: list[questionary.Choice | questionary.Separator] = []
+
+        # モデルに紐づくデータを先に表示
+        if model_info.val_paths_file:
+            count = count_images(model_info.val_paths_file)
+            options.append(
+                questionary.Choice(
+                    title=f"検証データ (val.txt - {count}枚)",
+                    value=str(model_info.val_paths_file),
+                )
+            )
+
+        if model_info.train_paths_file:
+            count = count_images(model_info.train_paths_file)
+            options.append(
+                questionary.Choice(
+                    title=f"訓練データ (train.txt - {count}枚)",
+                    value=str(model_info.train_paths_file),
+                )
+            )
+
+        # セパレーター（紐づくデータがある場合のみ）
+        if options:
+            options.append(questionary.Separator())
+
+        # 手動入力オプション
+        options.extend(
+            [
+                questionary.Choice(
+                    title="ディレクトリを指定",
+                    value="__dir__",
+                ),
+                questionary.Choice(
+                    title="単一ファイルを指定",
+                    value="__file__",
+                ),
+                questionary.Choice(
+                    title="パスリスト (.txt) を指定",
+                    value="__txt__",
+                ),
+            ]
+        )
+
+        # デフォルト選択（val.txt がデフォルト）
+        default_val = None
+        if model_info.val_paths_file:
+            default_val = str(model_info.val_paths_file)
 
         result: str | None = questionary.select(
-            "入力データの種類",
+            "入力データ",
             choices=options,
+            default=default_val,
         ).ask()
 
         if result is None:
@@ -203,8 +285,11 @@ class InferWizard:
             return self._ask_manual_path("画像ディレクトリのパス", default="data/test")
         elif result == "__file__":
             return self._ask_manual_path("画像ファイルのパス")
-        else:  # __txt__
+        elif result == "__txt__":
             return self._ask_manual_path("パスリストファイル (.txt) のパス")
+        else:
+            # val.txt/train.txt が選択された場合
+            return result
 
     def _ask_output_dir(self) -> str | None:
         """出力ディレクトリを質問.
