@@ -19,6 +19,9 @@ from pochisegmentation.interfaces.metrics import ISegmentationMetrics
 from pochisegmentation.interfaces.model import ISegmentationModel
 from pochisegmentation.logging.logger_manager import LoggerManager
 from pochisegmentation.utils.directory_manager import PochiWorkspaceManager
+from pochisegmentation.visualization.class_metrics_visualizer import (
+    ClassMetricsVisualizer,
+)
 from pochisegmentation.visualization.metrics_exporter import SegmentationMetricsExporter
 
 
@@ -193,6 +196,9 @@ class PochiSegmentationTrainer:
 
         # 訓練履歴を可視化
         self._save_training_history(history)
+
+        # クラス別精度を可視化
+        self._save_class_metrics()
 
         return history
 
@@ -378,6 +384,30 @@ class PochiSegmentationTrainer:
             logger=self._logger,
         )
         exporter.export_all(history)
+
+    def _save_class_metrics(self) -> None:
+        """クラス別精度を可視化・保存.
+
+        ClassMetricsVisualizer に処理を委譲.
+        """
+        if self._workspace_manager is None:
+            return
+
+        # compute_class_metrics メソッドが存在するか確認
+        if not hasattr(self._metrics, "compute_class_metrics"):
+            return
+
+        vis_dir = self._workspace_manager.get_visualization_dir()
+
+        # クラス別精度を計算
+        class_metrics = self._metrics.compute_class_metrics()
+
+        # 可視化
+        visualizer = ClassMetricsVisualizer(vis_dir)
+        paths = visualizer.export_all(class_metrics)
+
+        self._logger.info(f"クラス別精度を保存: {paths['class_iou_chart']}")
+        self._logger.info(f"Confusion Matrix を保存: {paths['confusion_matrix']}")
 
     @property
     def model(self) -> nn.Module:

@@ -42,6 +42,7 @@ def create_dataloaders(
 ) -> tuple[
     DataLoader[tuple[torch.Tensor, torch.Tensor]],
     DataLoader[tuple[torch.Tensor, torch.Tensor]],
+    list[str] | None,
 ]:
     """訓練/検証用 DataLoader を作成.
 
@@ -49,7 +50,7 @@ def create_dataloaders(
         config: 設定辞書.
 
     Returns:
-        (train_loader, val_loader) のタプル.
+        (train_loader, val_loader, class_names) のタプル.
     """
     logger = LoggerManager().get_logger("pochi")
 
@@ -95,7 +96,12 @@ def create_dataloaders(
         pin_memory=True,
     )
 
-    return train_loader, val_loader
+    # クラス名取得 (データセットから)
+    class_names: list[str] | None = None
+    if hasattr(train_dataset, "class_names"):
+        class_names = train_dataset.class_names
+
+    return train_loader, val_loader, class_names
 
 
 def run_training(
@@ -140,17 +146,17 @@ def run_training(
     # 損失関数作成
     criterion = ComponentFactory.create_loss(config)
 
-    # 評価指標作成
-    metrics = ComponentFactory.create_metrics(config)
+    # DataLoader作成 (class_names も取得)
+    train_loader, val_loader, class_names = create_dataloaders(config)
+
+    # 評価指標作成 (class_names を渡す)
+    metrics = ComponentFactory.create_metrics(config, class_names)
 
     # オプティマイザ作成
     optimizer = ComponentFactory.create_optimizer(model, config)
 
     # スケジューラ作成
     scheduler = ComponentFactory.create_scheduler(optimizer, config)
-
-    # DataLoader作成
-    train_loader, val_loader = create_dataloaders(config)
 
     # 画像パスをpathsディレクトリに保存
     train_dataset = train_loader.dataset
