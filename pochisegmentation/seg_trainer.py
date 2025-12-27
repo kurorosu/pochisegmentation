@@ -10,6 +10,7 @@ from typing import Any
 
 import torch
 from torch import nn
+from torch.amp import GradScaler, autocast
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -39,6 +40,8 @@ class PochiSegmentationTrainer:
         _scheduler: 学習率スケジューラ.
         _device: 使用デバイス.
         _config: 設定辞書.
+        _enable_amp: AMP (混合精度訓練) の有効フラグ.
+        _scaler: GradScaler (AMP 有効時のみ).
     """
 
     def __init__(
@@ -52,6 +55,7 @@ class PochiSegmentationTrainer:
         config: dict[str, Any] | None = None,
         workspace_manager: PochiWorkspaceManager | None = None,
         early_stopping_patience: int | None = None,
+        enable_amp: bool = False,
     ) -> None:
         """PochiSegmentationTrainerを初期化.
 
@@ -65,7 +69,12 @@ class PochiSegmentationTrainer:
             config: 設定辞書 (オプション).
             workspace_manager: ワークスペースマネージャ (オプション).
             early_stopping_patience: Early Stopping の patience (None または 0 で無効).
+            enable_amp: AMP (混合精度訓練) を有効化 (CUDA専用).
         """
+        # ロガー (早めに初期化)
+        logger_manager = LoggerManager()
+        self._logger = logger_manager.get_logger("PochiSegmentationTrainer")
+
         self._model = model.to(device)
         self._criterion = criterion
         self._metrics = metrics
@@ -76,13 +85,16 @@ class PochiSegmentationTrainer:
         self._workspace_manager = workspace_manager
         self._early_stopping_patience = early_stopping_patience or 0
 
+        # AMP 設定 (CPU では無効)
+        if enable_amp and device == "cpu":
+            self._logger.warning("AMP は CUDA でのみ有効です. 無効化します.")
+            enable_amp = False
+        self._enable_amp = enable_amp
+        self._scaler: GradScaler | None = GradScaler() if enable_amp else None
+
         # ベストスコア管理
         self._best_miou = 0.0
         self._best_epoch = 0
-
-        # ロガー
-        logger_manager = LoggerManager()
-        self._logger = logger_manager.get_logger("PochiSegmentationTrainer")
 
     def train(
         self,
@@ -110,6 +122,8 @@ class PochiSegmentationTrainer:
         }
 
         self._logger.info(f"訓練開始: {epochs} エポック")
+        if self._enable_amp:
+            self._logger.info("AMP (混合精度訓練) 有効")
         if self._early_stopping_patience > 0:
             self._logger.info(
                 f"Early Stopping: {self._early_stopping_patience} エポック改善なしで停止"
@@ -239,14 +253,21 @@ class PochiSegmentationTrainer:
             images = images.to(self._device)
             masks = masks.to(self._device)
 
-            # 順伝播
-            outputs = self._model(images)
-            loss = self._criterion(outputs, masks)
-
-            # 逆伝播
             self._optimizer.zero_grad()
-            loss.backward()
-            self._optimizer.step()
+
+            # AMP 対応
+            if self._enable_amp and self._scaler is not None:
+                with autocast(device_type="cuda"):
+                    outputs = self._model(images)
+                    loss = self._criterion(outputs, masks)
+                self._scaler.scale(loss).backward()
+                self._scaler.step(self._optimizer)
+                self._scaler.update()
+            else:
+                outputs = self._model(images)
+                loss = self._criterion(outputs, masks)
+                loss.backward()
+                self._optimizer.step()
 
             total_loss += loss.item()
 
@@ -271,9 +292,14 @@ class PochiSegmentationTrainer:
                 images = images.to(self._device)
                 masks = masks.to(self._device)
 
-                outputs = self._model(images)
-                preds = outputs.argmax(dim=1)
+                # AMP 対応 (autocast のみ, GradScaler 不要)
+                if self._enable_amp:
+                    with autocast(device_type="cuda"):
+                        outputs = self._model(images)
+                else:
+                    outputs = self._model(images)
 
+                preds = outputs.argmax(dim=1)
                 self._metrics.update(preds, masks)
 
         return self._metrics.compute()
