@@ -1,25 +1,31 @@
 ---
 name: Documentation Request
-about: Request new or improved documentation
+about: ドキュメントの追加・改善の提案
 labels: documentation
 ---
 
 ## Summary
 
-<!-- Brief description of the documentation improvement. -->
+<!-- ドキュメント追加・改善の概要を簡潔に記述してください. -->
 
 ## Target Documents
 
-<!-- Which files or sections need to be updated? -->
+<!-- 対象のドキュメントやファイルを記述してください. -->
 
 ## Proposed Changes
 
-<!-- What should be added, changed, or clarified? -->
+<!-- 提案する変更内容を記述してください. -->
 
 ## Acceptance Criteria
 
+<!-- 完了条件を記述してください. -->
+
 -
 
----
+## Labels
 
-> **Branch prefix**: `docs/`
+`documentation`
+
+## Branch
+
+`docs/`

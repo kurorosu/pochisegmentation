@@ -1,29 +1,35 @@
 ---
 name: Refactor Request
-about: Propose a code refactoring
-labels: refactoring
+about: リファクタリングの提案
+labels: refactor
 ---
 
 ## Summary
 
-<!-- Brief description of the refactoring. -->
+<!-- リファクタリングの概要を簡潔に記述してください. -->
 
 ## Background
 
-<!-- Why is this refactoring needed? -->
+<!-- このリファクタリングが必要な背景や動機を記述してください. -->
 
 ## Current Implementation
 
-<!-- What are the problems with the current code? -->
+<!-- 現在の実装の問題点を記述してください. -->
 
 ## Proposed Changes
 
-<!-- What changes do you propose? -->
+<!-- 提案する変更内容を記述してください. -->
 
 ## Acceptance Criteria
 
+<!-- 完了条件を記述してください. -->
+
 -
 
----
+## Labels
 
-> **Branch prefix**: `refactor/`
+`refactor`
+
+## Branch
+
+`refactor/`
