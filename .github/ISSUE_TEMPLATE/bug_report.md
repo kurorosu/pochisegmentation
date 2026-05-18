@@ -1,14 +1,16 @@
 ---
 name: Bug Report
-about: Report a bug or unexpected behavior
+about: バグの報告
 labels: bug
 ---
 
 ## Summary
 
-<!-- A clear and concise description of the bug. -->
+<!-- バグの概要を簡潔に記述してください. -->
 
 ## Steps to Reproduce
+
+<!-- バグを再現する手順を記述してください. -->
 
 1.
 2.
@@ -16,22 +18,28 @@ labels: bug
 
 ## Expected Behavior
 
-<!-- What you expected to happen. -->
+<!-- 期待される動作を記述してください. -->
 
 ## Actual Behavior
 
-<!-- What actually happened. -->
+<!-- 実際に発生した動作を記述してください. -->
 
 ## Environment
 
 - OS:
-- Runtime:
-- Version:
+- Python:
+- PyTorch:
+- pochisegmentation:
+- segmentation_models_pytorch:
 
 ## Additional Context
 
-<!-- Screenshots, logs, or any other relevant information. -->
+<!-- スクリーンショットやログなど, 追加情報があれば記述してください. -->
 
----
+## Labels
 
-> **Branch prefix**: `fix/`
+`bug`
+
+## Branch
+
+`fix/`
