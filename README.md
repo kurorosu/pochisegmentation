@@ -1,5 +1,9 @@
 # pochisegmentation
 
+![version](https://img.shields.io/badge/version-1.0.0-blue)
+![python](https://img.shields.io/badge/python-3.13-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
+
 A tiny but clever semantic segmentation pipeline for images — as friendly as Pochi!
 
 ## 特徴

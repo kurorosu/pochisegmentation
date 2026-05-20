@@ -1,5 +1,7 @@
 """Pochisegmentation - Segmentation framework based on pochitrain design philosophy."""
 
+__version__ = "1.0.0"
+
 from pochisegmentation.factories.component_factory import ComponentFactory
 from pochisegmentation.losses.seg_losses import (
     CombinedLoss,
