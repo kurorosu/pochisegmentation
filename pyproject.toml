@@ -34,6 +34,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "pytest-mock>=3.15.1",
+    "pytest-xdist>=3.6.0",
 ]
 
 [tool.black]
@@ -49,6 +50,26 @@ python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+# torchvision / segmentation_models_pytorch は py.typed 未提供だが実体はあるため,
+# follow_untyped_imports で実装を辿りつつ import-untyped エラーを抑止する.
+[[tool.mypy.overrides]]
+module = [
+    "torchvision.*",
+    "segmentation_models_pytorch.*",
+]
+follow_untyped_imports = true
+
+# colorlog はオプショナル依存 (try/except でガード) のため未導入環境では実体が無い.
+# import-not-found を抑止する.
+[[tool.mypy.overrides]]
+module = ["colorlog"]
+ignore_missing_imports = true
+
+# tests は厳格な型注釈を要求しない.
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
 
 [tool.pydocstyle]
 convention = "google"

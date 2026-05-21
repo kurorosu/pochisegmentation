@@ -9,14 +9,17 @@
 ### Added
 
 - GitHub Issue / PR テンプレートを整備 ([#29](https://github.com/kurorosu/pochisegmentation/pull/29))
-- `CHANGELOG.md` を Keep a Changelog 形式で新設し, アーカイブ用 `changelogs/` ディレクトリと運用ガイドを追加 (NA.)
-- `pochisegmentation/__init__.py` に `__version__` を追加し, README にバージョン / Python / ライセンスバッジを追加 (NA.)
+- `CHANGELOG.md` を Keep a Changelog 形式で新設し, アーカイブ用 `changelogs/` ディレクトリと運用ガイドを追加 ([#34](https://github.com/kurorosu/pochisegmentation/pull/34))
+- `pochisegmentation/__init__.py` に `__version__` を追加し, README にバージョン / Python / ライセンスバッジを追加 ([#34](https://github.com/kurorosu/pochisegmentation/pull/34))
+- pre-commit に gitleaks フックを追加 (NA.)
 
 ### Changed
 
 - Issue / PR テンプレートのフォーマットを整理 ([#30](https://github.com/kurorosu/pochisegmentation/pull/30))
 - `.gitignore` に `.claude/` を追加 ([#33](https://github.com/kurorosu/pochisegmentation/pull/33))
-- `pyproject.toml` の version を v1.0.0 タグに合わせて `1.0.0` へ修正 (NA.)
+- `pyproject.toml` の version を v1.0.0 タグに合わせて `1.0.0` へ修正 ([#34](https://github.com/kurorosu/pochisegmentation/pull/34))
+- pre-commit の mypy フックを `local` 化し `uv run mypy` ベースに変更, `[tool.mypy]` overrides を整備 (NA.)
+- pytest フックを `uv run --no-sync pytest -q -n 6 --dist=worksteal` に整理し pytest-xdist を追加 (NA.)
 
 ## [1.0.0] - 2025-12-27
 
