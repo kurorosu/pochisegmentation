@@ -4,7 +4,7 @@
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import cv2
 import numpy as np
@@ -68,9 +68,9 @@ class PochiSegmentationPredictor:
         image = cv2.imread(str(image_path))
         if image is None:
             raise ValueError(f"画像の読み込みに失敗しました: {image_path}")
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image_rgb = cast(NDArray[np.uint8], cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-        return self.predict_image(image)
+        return self.predict_image(image_rgb)
 
     def predict_image(self, image: NDArray[np.uint8]) -> NDArray[np.uint8]:
         """numpy配列の画像から推論を実行.
@@ -86,10 +86,10 @@ class PochiSegmentationPredictor:
 
         # 推論
         with torch.no_grad():
-            output = self._model(input_tensor.to(self._device))
+            output: torch.Tensor = self._model(input_tensor.to(self._device))
             pred = output.argmax(dim=1).squeeze().cpu().numpy()
 
-        return pred.astype(np.uint8)
+        return cast(NDArray[np.uint8], pred.astype(np.uint8))
 
     def predict_batch(
         self, loader: DataLoader[tuple[torch.Tensor, Any]]
@@ -134,7 +134,7 @@ class PochiSegmentationPredictor:
         image_tensor = tv_tensors.Image(image.transpose(2, 0, 1))
 
         # transform適用
-        transformed = self._transform(image_tensor)
+        transformed: torch.Tensor = self._transform(image_tensor)
 
         # バッチ次元を追加
         return transformed.unsqueeze(0)

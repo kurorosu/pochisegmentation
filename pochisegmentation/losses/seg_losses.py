@@ -36,7 +36,8 @@ class DiceLoss(ISegmentationLoss):
         Returns:
             スカラー損失テンソル.
         """
-        return self._loss(pred, target)
+        loss: torch.Tensor = self._loss(pred, target)
+        return loss
 
 
 class FocalLoss(ISegmentationLoss):
@@ -67,7 +68,8 @@ class FocalLoss(ISegmentationLoss):
         Returns:
             スカラー損失テンソル.
         """
-        return self._loss(pred, target)
+        loss: torch.Tensor = self._loss(pred, target)
+        return loss
 
 
 class JaccardLoss(ISegmentationLoss):
@@ -98,7 +100,8 @@ class JaccardLoss(ISegmentationLoss):
         Returns:
             スカラー損失テンソル.
         """
-        return self._loss(pred, target)
+        loss: torch.Tensor = self._loss(pred, target)
+        return loss
 
 
 class CombinedLoss(ISegmentationLoss):

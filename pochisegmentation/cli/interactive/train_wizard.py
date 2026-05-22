@@ -429,7 +429,7 @@ class TrainWizard:
         result: TrainingPreset | object | None = questionary.select(
             "訓練プリセット",
             choices=options,
-            default=TRAINING_PRESETS[1],  # balanced
+            default=options[1],  # balanced
         ).ask()
 
         return result
@@ -538,7 +538,7 @@ class TrainWizard:
         result: bool | None = questionary.select(
             "AMP (混合精度訓練)",
             choices=options,
-            default=False,
+            default=options[0],  # 無効
         ).ask()
 
         return result if result is not None else False

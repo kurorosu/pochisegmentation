@@ -1,6 +1,6 @@
 """セグメンテーション評価指標の実装."""
 
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torchmetrics import Accuracy, F1Score
@@ -77,8 +77,8 @@ class SegmentationMetrics(ISegmentationMetrics):
         return {
             "mIoU": self._iou.compute().item(),
             "Dice": self._dice.compute().item(),
-            "PixelAccuracy": self._pixel_accuracy.compute().item(),
-            "F1": self._f1.compute().item(),
+            "PixelAccuracy": cast(torch.Tensor, self._pixel_accuracy.compute()).item(),
+            "F1": cast(torch.Tensor, self._f1.compute()).item(),
         }
 
     def reset(self) -> None:

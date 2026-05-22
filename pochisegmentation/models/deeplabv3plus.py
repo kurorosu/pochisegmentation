@@ -1,5 +1,7 @@
 """DeepLabV3+モデルの実装."""
 
+from typing import cast
+
 import segmentation_models_pytorch as smp
 import torch
 import torch.nn as nn
@@ -49,7 +51,8 @@ class DeepLabV3PlusModel(ISegmentationModel):
         Returns:
             出力テンソル, 形状は (B, num_classes, H, W).
         """
-        return self._model(x)
+        output: torch.Tensor = self._model(x)
+        return output
 
     def get_encoder_params(self) -> list:
         """層別学習率用のエンコーダーパラメータを取得.
@@ -57,7 +60,8 @@ class DeepLabV3PlusModel(ISegmentationModel):
         Returns:
             エンコーダーパラメータのリスト.
         """
-        return list(self._model.encoder.parameters())
+        encoder = cast(nn.Module, self._model.encoder)
+        return list(encoder.parameters())
 
     def get_decoder_params(self) -> list:
         """層別学習率用のデコーダーパラメータを取得.
@@ -65,6 +69,6 @@ class DeepLabV3PlusModel(ISegmentationModel):
         Returns:
             デコーダーおよびセグメンテーションヘッドのパラメータリスト.
         """
-        return list(self._model.decoder.parameters()) + list(
-            self._model.segmentation_head.parameters()
-        )
+        decoder = cast(nn.Module, self._model.decoder)
+        segmentation_head = cast(nn.Module, self._model.segmentation_head)
+        return list(decoder.parameters()) + list(segmentation_head.parameters())

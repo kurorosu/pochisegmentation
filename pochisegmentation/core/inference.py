@@ -5,9 +5,12 @@ CLIの入力方法（引数/対話）には依存しない.
 """
 
 from pathlib import Path
+from typing import cast
 
 import cv2
+import numpy as np
 import torch
+from numpy.typing import NDArray
 from torchvision.transforms import v2
 
 from pochisegmentation import ComponentFactory, PochiSegmentationPredictor
@@ -150,6 +153,8 @@ def run_inference(
 
         # 元画像を読み込み (RGB)
         original_image = cv2.imread(str(image_path))
+        if original_image is None:
+            raise ValueError(f"画像の読み込みに失敗しました: {image_path}")
         original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
 
         # 推論
@@ -163,7 +168,10 @@ def run_inference(
 
         # 2. 元画像にオーバーレイした画像を保存
         overlay = overlay_mask_on_image(
-            original_image, mask, alpha=0.5, num_classes=num_classes
+            cast(NDArray[np.uint8], original_image),
+            mask,
+            alpha=0.5,
+            num_classes=num_classes,
         )
         vis_output_path = resolved_output_dir / f"{image_path.stem}_vis.png"
         cv2.imwrite(str(vis_output_path), cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
