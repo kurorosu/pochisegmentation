@@ -105,7 +105,7 @@ class ClassMetricsVisualizer:
 
         fig, ax = plt.subplots(figsize=(8, 8))
 
-        im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+        im = ax.imshow(cm, interpolation="nearest", cmap="Blues")
         ax.figure.colorbar(im, ax=ax)
 
         # タイトル (正規化の説明を含む)

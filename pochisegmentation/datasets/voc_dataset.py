@@ -1,7 +1,7 @@
 """VOC形式セグメンテーションデータセットの実装."""
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import cv2
 import numpy as np
@@ -195,6 +195,8 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
         # 画像を読み込み (BGR -> RGB)
         image_path = self._find_image_file(image_id)
         image = cv2.imread(str(image_path))
+        if image is None:
+            raise FileNotFoundError(f"画像ファイルが見つかりません: {image_path}")
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         # マスクを読み込み (グレースケール)
@@ -206,7 +208,7 @@ class VOCSegmentationDataset(Dataset[tuple[Any, Any]], ISegmentationDataset):
 
         # マスク値をリマップ (labelmeなどのパレットインデックス対応)
         if self._remap_labels:
-            mask = self._remap_mask(mask)
+            mask = self._remap_mask(cast(NDArray[np.uint8], mask))
 
         # transformを適用
         if self._transform is not None:

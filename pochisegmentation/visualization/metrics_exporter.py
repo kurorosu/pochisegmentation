@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -194,11 +195,11 @@ class TrainingMetricsExporter:
         has_val_data = any(m["val_loss"] != "" for m in self.metrics_history)
         if has_val_data:
             val_losses = [
-                m["val_loss"] if m["val_loss"] != "" else None
+                m["val_loss"] if m["val_loss"] != "" else float("nan")
                 for m in self.metrics_history
             ]
             val_accuracies = [
-                m["val_accuracy"] if m["val_accuracy"] != "" else None
+                m["val_accuracy"] if m["val_accuracy"] != "" else float("nan")
                 for m in self.metrics_history
             ]
 
@@ -352,7 +353,7 @@ class TrainingMetricsExporter:
         fig, ax = plt.subplots(figsize=(12, 8))
 
         # 各層の学習率をプロット
-        colors = plt.cm.tab10(range(len(lr_columns)))
+        colors = matplotlib.colormaps["tab10"](range(len(lr_columns)))
         for i, lr_col in enumerate(lr_columns):
             layer_name = lr_col.replace("lr_", "")
             layer_learning_rates = [m.get(lr_col, 0) for m in self.metrics_history]

@@ -4,6 +4,7 @@
 """
 
 from pathlib import Path
+from typing import cast
 
 import cv2
 import numpy as np
@@ -138,8 +139,13 @@ def overlay_mask_on_image(
     """
     # 画像サイズが異なる場合はマスクをリサイズ
     if image.shape[:2] != mask.shape:
-        mask = cv2.resize(
-            mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST
+        mask = cast(
+            NDArray[np.uint8],
+            cv2.resize(
+                mask,
+                (image.shape[1], image.shape[0]),
+                interpolation=cv2.INTER_NEAREST,
+            ),
         )
 
     color_mask = colorize_mask(mask, num_classes, palette)
