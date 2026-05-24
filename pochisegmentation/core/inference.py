@@ -38,7 +38,7 @@ def resolve_device(device: str) -> str:
         利用可能なデバイス.
     """
     if device == "cuda" and not torch.cuda.is_available():
-        logger = LoggerManager().get_logger("pochi")
+        logger = LoggerManager().get_logger("pochiseg")
         logger.warning("CUDAが利用できません. CPUを使用します.")
         return "cpu"
     return device
@@ -83,7 +83,7 @@ def run_inference(
         output_dir: 出力ディレクトリ (Noneでデフォルト).
         device: 使用デバイス.
     """
-    logger = LoggerManager().get_logger("pochi")
+    logger = LoggerManager().get_logger("pochiseg")
 
     logger.info(f"モデル読み込み: {model_path}")
 

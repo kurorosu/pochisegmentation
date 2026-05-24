@@ -73,7 +73,7 @@ class PochiSegmentationTrainer:
         """
         # ロガー (早めに初期化)
         logger_manager = LoggerManager()
-        self._logger = logger_manager.get_logger("PochiSegmentationTrainer")
+        self._logger = logger_manager.get_logger("pochiseg")
 
         self._model = model.to(device)
         self._criterion = criterion

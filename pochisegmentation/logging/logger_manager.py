@@ -78,9 +78,9 @@ class LoggerManager:
 
         Examples:
             >>> manager = LoggerManager()
-            >>> logger = manager.get_logger("pochitrain")
+            >>> logger = manager.get_logger("pochiseg")
             >>> logger.info("ログメッセージ")
-            [2025-07-14 18:37:48,735][INFO][pochitrain][main.py:123] ログメッセージ.
+            [2025-07-14 18:37:48,735][INFO][pochiseg][main.py:123] ログメッセージ.
         """
         if name in self._loggers:
             return self._loggers[name]
