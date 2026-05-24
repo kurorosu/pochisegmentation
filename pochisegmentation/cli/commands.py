@@ -36,7 +36,7 @@ def train_command(
         args: コマンドライン引数.
         stop_flag_callback: 停止フラグをチェックするコールバック関数.
     """
-    logger = LoggerManager().get_logger("pochi")
+    logger = LoggerManager().get_logger("pochiseg")
 
     if not args.config:
         logger.error("--config オプションが必要です")
@@ -65,7 +65,7 @@ def infer_command(args: argparse.Namespace) -> None:
     Args:
         args: コマンドライン引数.
     """
-    logger = LoggerManager().get_logger("pochi")
+    logger = LoggerManager().get_logger("pochiseg")
 
     if not args.model_path or not args.data:
         logger.error("--model-path と --data オプションが必要です")
@@ -170,7 +170,7 @@ def interactive_main(
     from pochisegmentation.cli.interactive.mode_selector import select_mode
     from pochisegmentation.cli.interactive.train_wizard import TrainWizard
 
-    logger = LoggerManager().get_logger("pochi")
+    logger = LoggerManager().get_logger("pochiseg")
 
     while True:
         mode = select_mode()

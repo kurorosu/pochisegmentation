@@ -38,7 +38,7 @@ def signal_handler(signum: int, frame: object) -> None:
     global training_interrupted
     training_interrupted = True
 
-    logger = LoggerManager().get_logger("pochi")
+    logger = LoggerManager().get_logger("pochiseg")
     logger.warning("訓練を安全に停止しています... (Ctrl+Cが検出されました)")
     logger.warning("現在のエポックが完了次第、訓練を終了します。")
 

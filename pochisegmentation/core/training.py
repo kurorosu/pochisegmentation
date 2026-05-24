@@ -31,7 +31,7 @@ def resolve_device(device: str) -> str:
         利用可能なデバイス.
     """
     if device == "cuda" and not torch.cuda.is_available():
-        logger = LoggerManager().get_logger("pochi")
+        logger = LoggerManager().get_logger("pochiseg")
         logger.warning("CUDAが利用できません. CPUを使用します.")
         return "cpu"
     return device
@@ -52,7 +52,7 @@ def create_dataloaders(
     Returns:
         (train_loader, val_loader, class_names) のタプル.
     """
-    logger = LoggerManager().get_logger("pochi")
+    logger = LoggerManager().get_logger("pochiseg")
 
     # Transform作成
     image_size = config.get("image_size", 256)
@@ -118,7 +118,7 @@ def run_training(
         config_content: 設定ファイルの内容 (対話時, Python形式の文字列).
         stop_flag_callback: 停止フラグをチェックするコールバック関数.
     """
-    logger = LoggerManager().get_logger("pochi")
+    logger = LoggerManager().get_logger("pochiseg")
 
     # ワークスペース作成
     workspace_manager = PochiWorkspaceManager(
