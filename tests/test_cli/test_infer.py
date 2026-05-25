@@ -1,4 +1,4 @@
-"""cli/commands.py の推論コマンドテスト."""
+"""cli/commands/infer.py の推論コマンドテスト."""
 
 import argparse
 from pathlib import Path
@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch
 
-from pochisegmentation.cli.commands import infer_command
+from pochisegmentation.cli.commands.infer import infer_command
 
 
 class TestInferCommand:

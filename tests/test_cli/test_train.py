@@ -1,4 +1,4 @@
-"""cli/commands.py の訓練コマンドテスト."""
+"""cli/commands/train.py の訓練コマンドテスト."""
 
 import argparse
 from pathlib import Path
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pochisegmentation.cli.commands import train_command
+from pochisegmentation.cli.commands.train import train_command
 
 
 class TestTrainCommand:
