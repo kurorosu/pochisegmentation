@@ -1,10 +1,9 @@
-"""CLIコマンド定義.
+"""対話モードのコマンド.
 
-pochi.py から呼び出される薄いアダプター層.
-設定取得方法の分岐を行い、core 層を呼び出す.
+サブコマンドなしで起動された場合の対話フローを提供する.
+訓練 / 推論の選択と, 設定方法の選択ウィザードを担当する.
 """
 
-import argparse
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -22,62 +21,6 @@ from pochisegmentation.utils.config_saver import get_saved_configs, get_training
 # センチネル値
 BACK_SENTINEL = object()
 EXIT_SENTINEL = object()
-
-
-def train_command(
-    args: argparse.Namespace,
-    stop_flag_callback: Callable[[], bool] | None = None,
-) -> None:
-    """訓練コマンド.
-
-    --config 必須. 対話モードは python pochi.py から.
-
-    Args:
-        args: コマンドライン引数.
-        stop_flag_callback: 停止フラグをチェックするコールバック関数.
-    """
-    logger = LoggerManager().get_logger("pochiseg")
-
-    if not args.config:
-        logger.error("--config オプションが必要です")
-        logger.error("対話モードを使用する場合は python pochi.py を実行してください")
-        sys.exit(1)
-
-    logger.info(f"設定ファイルを読み込み: {args.config}")
-    try:
-        config = ConfigLoader.load(args.config)
-    except PochiConfigError as e:
-        logger.error(f"設定エラー: {e}")
-        sys.exit(1)
-
-    run_training(
-        config,
-        config_path=Path(args.config),
-        stop_flag_callback=stop_flag_callback,
-    )
-
-
-def infer_command(args: argparse.Namespace) -> None:
-    """推論コマンド.
-
-    --model-path と --data 必須. 対話モードは python pochi.py から.
-
-    Args:
-        args: コマンドライン引数.
-    """
-    logger = LoggerManager().get_logger("pochiseg")
-
-    if not args.model_path or not args.data:
-        logger.error("--model-path と --data オプションが必要です")
-        logger.error("対話モードを使用する場合は python pochi.py を実行してください")
-        sys.exit(1)
-
-    run_inference(
-        model_path=Path(args.model_path),
-        data_path=Path(args.data),
-        output_dir=Path(args.output) if args.output else None,
-        device=args.device,
-    )
 
 
 def _select_train_mode() -> str | object | None:
