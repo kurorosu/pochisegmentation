@@ -1,4 +1,4 @@
-"""pochi.py CLIのテスト."""
+"""cli/pochi.py CLIのテスト."""
 
 import tempfile
 from pathlib import Path
@@ -11,7 +11,7 @@ from pochisegmentation.utils.config_loader import ConfigLoader
 
 
 class TestLoadConfig:
-    """ConfigLoaderのテストクラス (pochi.py用)."""
+    """ConfigLoaderのテストクラス (CLI 用)."""
 
     def test_load_config_success(self) -> None:
         """設定ファイルの読み込み成功テスト."""

@@ -36,7 +36,7 @@ uv sync
 設定ファイル不要で、質問に答えるだけで訓練を開始できます。
 
 ```bash
-python pochi.py train
+uv run pochi train
 ```
 
 質問例:
@@ -53,27 +53,27 @@ python pochi.py train
 ### 対話モードで推論
 
 ```bash
-python pochi.py infer
+uv run pochi infer
 ```
 
 ### 設定ファイルを使用する場合
 
 ```bash
 # 訓練
-python pochi.py train --config configs/pochi_seg_config.py
+uv run pochi train --config configs/pochi_seg_config.py
 
 # 推論
-python pochi.py infer --model work_dirs/20251225_001/models/best.pth --data path/to/images/
+uv run pochi infer --model work_dirs/20251225_001/models/best.pth --data path/to/images/
 ```
 
 ## コマンド一覧
 
 | コマンド | 説明 |
 |---------|------|
-| `python pochi.py train` | 対話モードで訓練 |
-| `python pochi.py train --config <path>` | 設定ファイルで訓練 |
-| `python pochi.py infer` | 対話モードで推論 |
-| `python pochi.py infer --model <path> --data <path>` | 引数指定で推論 |
+| `uv run pochi train` | 対話モードで訓練 |
+| `uv run pochi train --config <path>` | 設定ファイルで訓練 |
+| `uv run pochi infer` | 対話モードで推論 |
+| `uv run pochi infer --model <path> --data <path>` | 引数指定で推論 |
 
 ## 出力ファイル
 

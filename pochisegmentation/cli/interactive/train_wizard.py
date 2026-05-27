@@ -609,5 +609,5 @@ class TrainWizard:
 
         self.console.print(f"[green]設定を保存しました: {saved_path}[/green]")
         self.console.print(
-            f"[cyan]再利用: python pochi.py train --config {saved_path}[/cyan]"
+            f"[cyan]再利用: uv run pochi train --config {saved_path}[/cyan]"
         )

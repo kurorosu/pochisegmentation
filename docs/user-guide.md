@@ -19,7 +19,7 @@ pochisegmentation の詳細な使用方法を説明します.
 設定ファイル不要で、質問に答えるだけで訓練を開始できます.
 
 ```bash
-python pochi.py train
+uv run pochi train
 ```
 
 #### 質問の流れ
@@ -71,7 +71,7 @@ python pochi.py train
 ### 推論 (infer)
 
 ```bash
-python pochi.py infer
+uv run pochi infer
 ```
 
 #### 質問の流れ
@@ -89,13 +89,13 @@ python pochi.py infer
 ### 訓練
 
 ```bash
-python pochi.py train --config configs/pochi_seg_config.py
+uv run pochi train --config configs/pochi_seg_config.py
 ```
 
 ### 推論
 
 ```bash
-python pochi.py infer --model work_dirs/20251225_001/models/best.pth --data path/to/images/
+uv run pochi infer --model work_dirs/20251225_001/models/best.pth --data path/to/images/
 ```
 
 #### 推論オプション
@@ -110,13 +110,13 @@ python pochi.py infer --model work_dirs/20251225_001/models/best.pth --data path
 
 ```bash
 # 単一画像
-python pochi.py infer --model best.pth --data image.jpg
+uv run pochi infer --model best.pth --data image.jpg
 
 # ディレクトリ内の全画像
-python pochi.py infer --model best.pth --data images/
+uv run pochi infer --model best.pth --data images/
 
 # パスリストファイル
-python pochi.py infer --model best.pth --data image_list.txt
+uv run pochi infer --model best.pth --data image_list.txt
 ```
 
 ---
