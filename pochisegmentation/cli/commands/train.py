@@ -1,6 +1,6 @@
 """訓練コマンド.
 
-pochi.py から呼び出される薄いアダプター層.
+CLI エントリ (`pochisegmentation.cli.pochi`) から呼び出される薄いアダプター層.
 設定取得方法の分岐を行い, core 層を呼び出す.
 """
 
@@ -21,7 +21,7 @@ def train_command(
 ) -> None:
     """訓練コマンド.
 
-    --config 必須. 対話モードは python pochi.py から.
+    --config 必須. 対話モードは `uv run pochi` から.
 
     Args:
         args: コマンドライン引数.
@@ -31,7 +31,7 @@ def train_command(
 
     if not args.config:
         logger.error("--config オプションが必要です")
-        logger.error("対話モードを使用する場合は python pochi.py を実行してください")
+        logger.error("対話モードを使用する場合は `uv run pochi` を実行してください")
         sys.exit(1)
 
     logger.info(f"設定ファイルを読み込み: {args.config}")

@@ -21,7 +21,9 @@
 - pre-commit の mypy フックを `local` 化し `uv run mypy` ベースに変更, `[tool.mypy]` overrides を整備 ([#36](https://github.com/kurorosu/pochisegmentation/pull/36))
 - pytest フックを `uv run --no-sync pytest -q -n 6 --dist=worksteal` に整理し pytest-xdist を追加 ([#36](https://github.com/kurorosu/pochisegmentation/pull/36))
 - ロガー名を `pochiseg` に統一 ([#44](https://github.com/kurorosu/pochisegmentation/pull/44))
-- CLI コマンドを `cli/commands/` パッケージに分割し, argparse 構築を `cli/parser.py` に切り出し (NA.)
+- CLI コマンドを `cli/commands/` パッケージに分割し, argparse 構築を `cli/parser.py` に切り出し ([#45](https://github.com/kurorosu/pochisegmentation/pull/45))
+- CLI エントリを `pochisegmentation/cli/pochi.py` に移植し `[project.scripts]` で `uv run pochi` を提供 (NA.)
+- pytest `addopts` に `-n auto --dist=worksteal` と `markers` を追加 (NA.)
 
 ### Fixed
 

@@ -1001,7 +1001,7 @@ wheels = [
 [[package]]
 name = "pochisegmentation"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
     { name = "opencv-python" },

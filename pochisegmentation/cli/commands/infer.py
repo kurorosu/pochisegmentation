@@ -1,6 +1,6 @@
 """推論コマンド.
 
-pochi.py から呼び出される薄いアダプター層.
+CLI エントリ (`pochisegmentation.cli.pochi`) から呼び出される薄いアダプター層.
 設定取得方法の分岐を行い, core 層を呼び出す.
 """
 
@@ -15,7 +15,7 @@ from pochisegmentation.logging.logger_manager import LoggerManager
 def infer_command(args: argparse.Namespace) -> None:
     """推論コマンド.
 
-    --model-path と --data 必須. 対話モードは python pochi.py から.
+    --model-path と --data 必須. 対話モードは `uv run pochi` から.
 
     Args:
         args: コマンドライン引数.
@@ -24,7 +24,7 @@ def infer_command(args: argparse.Namespace) -> None:
 
     if not args.model_path or not args.data:
         logger.error("--model-path と --data オプションが必要です")
-        logger.error("対話モードを使用する場合は python pochi.py を実行してください")
+        logger.error("対話モードを使用する場合は `uv run pochi` を実行してください")
         sys.exit(1)
 
     run_inference(

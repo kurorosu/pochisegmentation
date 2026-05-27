@@ -15,6 +15,13 @@ dependencies = [
     "rich>=13.0.0",
 ]
 
+[project.scripts]
+pochi = "pochisegmentation.cli.pochi:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [[tool.uv.index]]
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
@@ -76,4 +83,9 @@ convention = "google"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --cov=. --cov-report=term-missing"
+addopts = "-v --cov=. --cov-report=term-missing -n auto --dist=worksteal"
+markers = [
+    "slow: 実行時間の長いテスト",
+    "integration: 統合テスト",
+    "unit: ユニットテスト",
+]
