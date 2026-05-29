@@ -3,7 +3,13 @@
 サイレントフォールバックを防止し, 不正な設定を即座にエラーとする.
 """
 
-from typing import Any
+from pydantic import ValidationError
+
+__all__ = [
+    "PochiConfigError",
+    "ConfigFileNotFoundError",
+    "ConfigValidationError",
+]
 
 
 class PochiConfigError(Exception):
@@ -25,60 +31,22 @@ class ConfigFileNotFoundError(PochiConfigError):
         super().__init__(f"設定ファイルが見つかりません: {config_path}")
 
 
-class ConfigKeyMissingError(PochiConfigError):
-    """必須キーが設定ファイルにない場合のエラー."""
+class ConfigValidationError(PochiConfigError):
+    """設定値のバリデーションに失敗した場合のエラー.
 
-    def __init__(self, missing_keys: list[str]) -> None:
+    Pydantic の ValidationError をラップし, どの設定ファイルが原因かを示す.
+    """
+
+    def __init__(self, config_path: str, validation_error: ValidationError) -> None:
         """初期化.
 
         Args:
-            missing_keys (list[str]): 不足している必須キーのリスト.
+            config_path (str): バリデーションに失敗した設定ファイルのパス.
+            validation_error (ValidationError): 元の Pydantic バリデーションエラー.
         """
-        self.missing_keys = missing_keys
-        super().__init__(f"設定ファイルに必須項目がありません: {missing_keys}")
-
-
-class ConfigValueError(PochiConfigError):
-    """設定値が不正な場合のエラー."""
-
-    def __init__(
-        self, key: str, value: Any, allowed_values: list[Any] | None = None
-    ) -> None:
-        """初期化.
-
-        Args:
-            key (str): 設定キー.
-            value (Any): 不正な設定値.
-            allowed_values (list[Any] | None): 許可される値のリスト. Defaults to None.
-        """
-        self.key = key
-        self.value = value
-        self.allowed_values = allowed_values
-        if allowed_values:
-            msg = (
-                f"設定 '{key}' の値 '{value}' は無効です. "
-                f"許可される値: {allowed_values}"
-            )
-        else:
-            msg = f"設定 '{key}' の値 '{value}' は無効です."
-        super().__init__(msg)
-
-
-class ConfigTypeError(PochiConfigError):
-    """設定値の型が不正な場合のエラー."""
-
-    def __init__(self, key: str, expected_type: type, actual_type: type):
-        """初期化.
-
-        Args:
-            key (str): 設定キー.
-            expected_type (type): 期待される型.
-            actual_type (type): 実際の型.
-        """
-        self.key = key
-        self.expected_type = expected_type
-        self.actual_type = actual_type
+        self.config_path = config_path
+        self.validation_error = validation_error
         super().__init__(
-            f"設定 '{key}' の型が不正です. "
-            f"期待: {expected_type.__name__}, 実際: {actual_type.__name__}"
+            f"設定ファイルのバリデーションに失敗しました: {config_path}\n"
+            f"{validation_error}"
         )

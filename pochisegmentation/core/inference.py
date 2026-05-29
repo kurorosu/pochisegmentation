@@ -108,7 +108,7 @@ def run_inference(
     model = ComponentFactory.create_model(config)
 
     # Transform作成
-    image_size = config.get("image_size", 256)
+    image_size = config.image_size
     transform = v2.Compose(
         [
             v2.Resize((image_size, image_size)),
@@ -146,7 +146,7 @@ def run_inference(
     logger.info(f"推論対象: {len(image_paths)} 枚")
 
     # クラス数を取得
-    num_classes = config.get("num_classes", 2)
+    num_classes = config.num_classes
 
     for image_path in image_paths:
         logger.info(f"推論中: {image_path}")

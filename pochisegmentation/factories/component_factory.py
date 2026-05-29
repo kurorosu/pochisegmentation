@@ -1,10 +1,11 @@
 """依存性注入用コンポーネントファクトリー."""
 
-from typing import Any, Callable
+from typing import Callable
 
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepLR
 
+from pochisegmentation.config import PochiSegConfig
 from pochisegmentation.interfaces.loss import ISegmentationLoss
 from pochisegmentation.interfaces.metrics import ISegmentationMetrics
 from pochisegmentation.interfaces.model import ISegmentationModel
@@ -63,44 +64,37 @@ class ComponentFactory:
         cls._metrics_registry[name] = metrics_class
 
     @classmethod
-    def create_model(cls, config: dict[str, Any]) -> ISegmentationModel:
+    def create_model(cls, config: PochiSegConfig) -> ISegmentationModel:
         """設定からモデルを生成.
 
         Args:
-            config: モデル設定を含む辞書.
-                - architecture: モデル名 (デフォルト: "Unet").
-                - encoder_name: エンコーダー名 (デフォルト: "resnet34").
-                - num_classes: クラス数 (必須).
-                - pretrained: 事前学習済み重みを使用するか (デフォルト: True).
-                - in_channels: 入力チャンネル数 (デフォルト: 3).
+            config: 訓練設定 (PochiSegConfig).
 
         Returns:
             生成されたモデルインスタンス.
 
         Raises:
             ValueError: 未登録のモデル名が指定された場合.
-            KeyError: 必須パラメータが設定に存在しない場合.
         """
-        model_name = config.get("architecture", "Unet")
-        if model_name not in cls._model_registry:
+        if config.architecture not in cls._model_registry:
             available = list(cls._model_registry.keys())
-            raise ValueError(f"未登録のモデル: {model_name}. 利用可能: {available}")
+            raise ValueError(
+                f"未登録のモデル: {config.architecture}. 利用可能: {available}"
+            )
 
-        return cls._model_registry[model_name](
-            encoder_name=config.get("encoder_name", "resnet34"),
-            num_classes=config["num_classes"],
-            pretrained=config.get("pretrained", True),
-            in_channels=config.get("in_channels", 3),
+        return cls._model_registry[config.architecture](
+            encoder_name=config.encoder_name,
+            num_classes=config.num_classes,
+            pretrained=config.pretrained,
+            in_channels=config.in_channels,
         )
 
     @classmethod
-    def create_loss(cls, config: dict[str, Any]) -> ISegmentationLoss:
+    def create_loss(cls, config: PochiSegConfig) -> ISegmentationLoss:
         """設定から損失関数を生成.
 
         Args:
-            config: 損失関数設定を含む辞書.
-                - loss: 損失関数名 (デフォルト: "DiceLoss").
-                - loss_params: 損失関数に渡す追加パラメータ (デフォルト: {}).
+            config: 訓練設定 (PochiSegConfig).
 
         Returns:
             生成された損失関数インスタンス.
@@ -108,25 +102,20 @@ class ComponentFactory:
         Raises:
             ValueError: 未登録の損失関数名が指定された場合.
         """
-        loss_name = config.get("loss", "DiceLoss")
-        if loss_name not in cls._loss_registry:
+        if config.loss not in cls._loss_registry:
             available = list(cls._loss_registry.keys())
-            raise ValueError(f"未登録の損失関数: {loss_name}. 利用可能: {available}")
+            raise ValueError(f"未登録の損失関数: {config.loss}. 利用可能: {available}")
 
-        loss_params = config.get("loss_params", {})
-        return cls._loss_registry[loss_name](**loss_params)
+        return cls._loss_registry[config.loss](**config.loss_params)
 
     @classmethod
     def create_metrics(
-        cls, config: dict[str, Any], class_names: list[str] | None = None
+        cls, config: PochiSegConfig, class_names: list[str] | None = None
     ) -> ISegmentationMetrics:
         """設定から評価指標を生成.
 
         Args:
-            config: 評価指標設定を含む辞書.
-                - metrics: 評価指標名 (デフォルト: "SegmentationMetrics").
-                - num_classes: クラス数 (必須).
-                - device: 計算デバイス (デフォルト: "cuda").
+            config: 訓練設定 (PochiSegConfig).
             class_names: クラス名リスト (オプション).
 
         Returns:
@@ -134,17 +123,17 @@ class ComponentFactory:
 
         Raises:
             ValueError: 未登録の評価指標名が指定された場合.
-            KeyError: 必須パラメータが設定に存在しない場合.
         """
-        metrics_name = config.get("metrics", "SegmentationMetrics")
-        if metrics_name not in cls._metrics_registry:
+        if config.metrics not in cls._metrics_registry:
             available = list(cls._metrics_registry.keys())
-            raise ValueError(f"未登録の評価指標: {metrics_name}. 利用可能: {available}")
+            raise ValueError(
+                f"未登録の評価指標: {config.metrics}. 利用可能: {available}"
+            )
 
-        return cls._metrics_registry[metrics_name](
-            num_classes=config["num_classes"],
+        return cls._metrics_registry[config.metrics](
+            num_classes=config.num_classes,
             class_names=class_names,
-            device=config.get("device", "cuda"),
+            device=config.device,
         )
 
     @classmethod
@@ -183,65 +172,66 @@ class ComponentFactory:
 
     @classmethod
     def create_optimizer(
-        cls, model: torch.nn.Module, config: dict[str, Any]
+        cls, model: torch.nn.Module, config: PochiSegConfig
     ) -> torch.optim.Optimizer:
         """オプティマイザを作成.
 
         Args:
             model: モデル.
-            config: 設定辞書.
+            config: 訓練設定 (PochiSegConfig).
 
         Returns:
             オプティマイザ.
+
+        Raises:
+            ValueError: 未対応のオプティマイザ名が指定された場合.
         """
         # 層別学習率
-        if config.get("enable_layer_wise_lr", False):
+        if config.enable_layer_wise_lr:
             param_groups = create_layer_wise_param_groups(
                 model,  # type: ignore
-                encoder_lr=config.get("encoder_lr", 1e-4),
-                decoder_lr=config.get("decoder_lr", 1e-3),
+                encoder_lr=config.encoder_lr,
+                decoder_lr=config.decoder_lr,
             )
             # 層別学習率の場合, lrはparam_groupsで設定済み
-            lr = config.get("decoder_lr", 1e-3)
+            lr = config.decoder_lr
         else:
             param_groups = model.parameters()  # type: ignore
-            lr = config.get("learning_rate", 1e-3)
+            lr = config.learning_rate
 
-        optimizer_name = config.get("optimizer", "AdamW")
-
-        if optimizer_name == "Adam":
+        if config.optimizer == "Adam":
             return torch.optim.Adam(param_groups, lr=lr)
-        elif optimizer_name == "AdamW":
+        elif config.optimizer == "AdamW":
             return torch.optim.AdamW(param_groups, lr=lr)
-        elif optimizer_name == "SGD":
+        elif config.optimizer == "SGD":
             return torch.optim.SGD(param_groups, lr=lr, momentum=0.9)
         else:
-            raise ValueError(f"Unknown optimizer: {optimizer_name}")
+            raise ValueError(f"Unknown optimizer: {config.optimizer}")
 
     @classmethod
     def create_scheduler(
-        cls, optimizer: torch.optim.Optimizer, config: dict[str, Any]
+        cls, optimizer: torch.optim.Optimizer, config: PochiSegConfig
     ) -> torch.optim.lr_scheduler.LRScheduler | None:
         """スケジューラを作成.
 
         Args:
             optimizer: オプティマイザ.
-            config: 設定辞書.
+            config: 訓練設定 (PochiSegConfig).
 
         Returns:
             スケジューラ, 設定がない場合はNone.
+
+        Raises:
+            ValueError: 未対応のスケジューラ名が指定された場合.
         """
-        scheduler_name = config.get("scheduler")
-        if scheduler_name is None:
+        if config.scheduler is None:
             return None
 
-        scheduler_params = config.get("scheduler_params", {})
-
-        if scheduler_name == "CosineAnnealingLR":
-            return CosineAnnealingLR(optimizer, **scheduler_params)
-        elif scheduler_name == "StepLR":
-            return StepLR(optimizer, **scheduler_params)
-        elif scheduler_name == "ReduceLROnPlateau":
-            return ReduceLROnPlateau(optimizer, **scheduler_params)
+        if config.scheduler == "CosineAnnealingLR":
+            return CosineAnnealingLR(optimizer, **config.scheduler_params)
+        elif config.scheduler == "StepLR":
+            return StepLR(optimizer, **config.scheduler_params)
+        elif config.scheduler == "ReduceLROnPlateau":
+            return ReduceLROnPlateau(optimizer, **config.scheduler_params)
         else:
-            raise ValueError(f"Unknown scheduler: {scheduler_name}")
+            raise ValueError(f"Unknown scheduler: {config.scheduler}")

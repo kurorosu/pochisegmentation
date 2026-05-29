@@ -15,6 +15,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
+from pochisegmentation.config import PochiSegConfig
 from pochisegmentation.interfaces.loss import ISegmentationLoss
 from pochisegmentation.interfaces.metrics import ISegmentationMetrics
 from pochisegmentation.interfaces.model import ISegmentationModel
@@ -52,7 +53,7 @@ class PochiSegmentationTrainer:
         optimizer: Optimizer,
         scheduler: LRScheduler | None = None,
         device: str = "cuda",
-        config: dict[str, Any] | None = None,
+        config: PochiSegConfig | None = None,
         workspace_manager: PochiWorkspaceManager | None = None,
         early_stopping_patience: int | None = None,
         enable_amp: bool = False,
@@ -66,7 +67,7 @@ class PochiSegmentationTrainer:
             optimizer: オプティマイザ.
             scheduler: 学習率スケジューラ (オプション).
             device: 使用デバイス ("cuda" or "cpu").
-            config: 設定辞書 (オプション).
+            config: 訓練設定 (PochiSegConfig, オプション).
             workspace_manager: ワークスペースマネージャ (オプション).
             early_stopping_patience: Early Stopping の patience (None または 0 で無効).
             enable_amp: AMP (混合精度訓練) を有効化 (CUDA専用).
@@ -81,7 +82,7 @@ class PochiSegmentationTrainer:
         self._optimizer = optimizer
         self._scheduler = scheduler
         self._device = device
-        self._config = config or {}
+        self._config = config
         self._workspace_manager = workspace_manager
         self._early_stopping_patience = early_stopping_patience or 0
 
