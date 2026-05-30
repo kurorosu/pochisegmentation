@@ -6,12 +6,12 @@ CLIの入力方法（ファイル/対話）には依存しない.
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import torch
 from torch.utils.data import DataLoader
 
 from pochisegmentation import ComponentFactory, PochiSegmentationTrainer
+from pochisegmentation.config import PochiSegConfig
 from pochisegmentation.datasets.voc_dataset import VOCSegmentationDataset
 from pochisegmentation.logging.logger_manager import LoggerManager
 from pochisegmentation.transforms.seg_transforms import (
@@ -38,7 +38,7 @@ def resolve_device(device: str) -> str:
 
 
 def create_dataloaders(
-    config: dict[str, Any],
+    config: PochiSegConfig,
 ) -> tuple[
     DataLoader[tuple[torch.Tensor, torch.Tensor]],
     DataLoader[tuple[torch.Tensor, torch.Tensor]],
@@ -47,7 +47,7 @@ def create_dataloaders(
     """訓練/検証用 DataLoader を作成.
 
     Args:
-        config: 設定辞書.
+        config: 訓練設定 (PochiSegConfig).
 
     Returns:
         (train_loader, val_loader, class_names) のタプル.
@@ -55,42 +55,36 @@ def create_dataloaders(
     logger = LoggerManager().get_logger("pochiseg")
 
     # Transform作成
-    image_size = config.get("image_size", 256)
-    train_transform = get_basic_train_transform(image_size)
-    val_transform = get_basic_val_transform(image_size)
+    train_transform = get_basic_train_transform(config.image_size)
+    val_transform = get_basic_val_transform(config.image_size)
 
     # データセット作成
-    data_root = config.get("data_root", "data")
-    train_split = config.get("train_split", "train")
-    val_split = config.get("val_split", "val")
-
-    logger.info(f"データセットを読み込み中: {data_root}")
+    logger.info(f"データセットを読み込み中: {config.data_root}")
     train_dataset = VOCSegmentationDataset(
-        root=data_root, split=train_split, transform=train_transform
+        root=config.data_root, split=config.train_split, transform=train_transform
     )
     val_dataset = VOCSegmentationDataset(
-        root=data_root, split=val_split, transform=val_transform
+        root=config.data_root, split=config.val_split, transform=val_transform
     )
 
     logger.info(f"訓練データ: {len(train_dataset)} 枚")
     logger.info(f"検証データ: {len(val_dataset)} 枚")
 
     # DataLoader作成
-    batch_size = config.get("batch_size", 16)
     # num_workers=0 は必須: Ctrl+C による安全停止を有効にするため.
     # マルチプロセスワーカー使用時、シグナルがワーカーに伝播しクラッシュする.
     num_workers = 0
 
     train_loader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = DataLoader(
         train_dataset,
-        batch_size=batch_size,
+        batch_size=config.batch_size,
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
     )
     val_loader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = DataLoader(
         val_dataset,
-        batch_size=batch_size,
+        batch_size=config.batch_size,
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
@@ -105,7 +99,7 @@ def create_dataloaders(
 
 
 def run_training(
-    config: dict[str, Any],
+    config: PochiSegConfig,
     config_path: Path | None = None,
     config_content: str | None = None,
     stop_flag_callback: Callable[[], bool] | None = None,
@@ -113,7 +107,7 @@ def run_training(
     """訓練を実行.
 
     Args:
-        config: 設定辞書.
+        config: 訓練設定 (PochiSegConfig).
         config_path: 元の設定ファイルパス (ファイル指定時).
         config_content: 設定ファイルの内容 (対話時, Python形式の文字列).
         stop_flag_callback: 停止フラグをチェックするコールバック関数.
@@ -121,9 +115,7 @@ def run_training(
     logger = LoggerManager().get_logger("pochiseg")
 
     # ワークスペース作成
-    workspace_manager = PochiWorkspaceManager(
-        base_dir=config.get("work_dir", "work_dirs")
-    )
+    workspace_manager = PochiWorkspaceManager(base_dir=config.work_dir)
     workspace_path = workspace_manager.create_workspace()
     logger.info(f"ワークスペース作成: {workspace_path}")
 
@@ -137,7 +129,7 @@ def run_training(
         logger.info(f"設定ファイルを保存: {saved_config_path}")
 
     # デバイス解決
-    device = resolve_device(config.get("device", "cuda"))
+    device = resolve_device(config.device)
 
     # モデル作成
     logger.info("モデルを作成中...")
@@ -179,17 +171,16 @@ def run_training(
         device=device,
         config=config,
         workspace_manager=workspace_manager,
-        early_stopping_patience=config.get("early_stopping_patience"),
-        enable_amp=config.get("enable_amp", False),
+        early_stopping_patience=config.early_stopping_patience,
+        enable_amp=config.enable_amp,
     )
 
     # 訓練実行
-    epochs = config.get("epochs", 100)
-    logger.info(f"訓練開始: {epochs} エポック")
+    logger.info(f"訓練開始: {config.epochs} エポック")
     trainer.train(
         train_loader,
         val_loader,
-        epochs=epochs,
+        epochs=config.epochs,
         stop_flag_callback=stop_flag_callback,
     )
 

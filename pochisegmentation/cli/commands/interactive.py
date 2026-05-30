@@ -12,6 +12,7 @@ from typing import cast
 import questionary
 from rich.console import Console
 
+from pochisegmentation.config import PochiSegConfig
 from pochisegmentation.core import run_inference, run_training
 from pochisegmentation.exceptions import PochiConfigError
 from pochisegmentation.logging.logger_manager import LoggerManager
@@ -190,7 +191,7 @@ def interactive_main(
                         # キャンセル: 訓練モード選択に戻る
                         continue
 
-                    config = result.to_dict()
+                    config = PochiSegConfig.from_dict(result.to_dict())
                     config_content = result.to_python_config()
                     run_training(
                         config,
