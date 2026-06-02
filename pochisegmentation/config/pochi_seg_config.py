@@ -87,6 +87,8 @@ class PochiSegConfig(BaseModel):
     # Early Stopping
     # =========================================================================
     early_stopping_patience: int | None = Field(default=None, ge=0)
+    # ベストモデル選択と Early Stopping が共有する監視メトリクス.
+    early_stopping_monitor: Literal["mIoU", "Dice", "val_loss"] = "mIoU"
 
     # =========================================================================
     # AMP (Automatic Mixed Precision)

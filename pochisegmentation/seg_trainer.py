@@ -1,7 +1,11 @@
-"""セグメンテーション訓練クラス.
+"""セグメンテーション訓練クラス (ファサード).
 
 DIP (依存性逆転原則) に基づき, 具象クラスではなくインターフェースに依存.
 DI (依存性注入) により, コンストラクタで依存性を注入.
+
+訓練ループの詳細は pochisegmentation.training 配下の部品 (EpochRunner /
+Evaluator / CheckpointStore / MetricsTracker / EarlyStopping / TrainingLoop)
+に委譲し, 本クラスはそれらを束ねる薄いファサードとして機能する.
 """
 
 from collections.abc import Callable
@@ -10,9 +14,9 @@ from typing import Any
 
 import torch
 from torch import nn
-from torch.amp import GradScaler, autocast
+from torch.amp import GradScaler
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
+from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 
 from pochisegmentation.config import PochiSegConfig
@@ -20,29 +24,25 @@ from pochisegmentation.interfaces.loss import ISegmentationLoss
 from pochisegmentation.interfaces.metrics import ISegmentationMetrics
 from pochisegmentation.interfaces.model import ISegmentationModel
 from pochisegmentation.logging.logger_manager import LoggerManager
+from pochisegmentation.training.checkpoint_store import CheckpointStore
+from pochisegmentation.training.early_stopping import EarlyStopping
+from pochisegmentation.training.epoch_runner import EpochRunner
+from pochisegmentation.training.evaluator import Evaluator
+from pochisegmentation.training.metrics_tracker import MetricsTracker
+from pochisegmentation.training.training_loop import TrainingContext, TrainingLoop
 from pochisegmentation.utils.directory_manager import PochiWorkspaceManager
-from pochisegmentation.visualization.class_metrics_visualizer import (
-    ClassMetricsVisualizer,
-)
-from pochisegmentation.visualization.metrics_exporter import SegmentationMetricsExporter
+
+__all__ = ["PochiSegmentationTrainer"]
 
 
 class PochiSegmentationTrainer:
-    """セグメンテーション訓練クラス.
+    """セグメンテーション訓練のファサード.
 
     DIP: 具象クラスではなくインターフェースに依存.
     DI: コンストラクタで依存性を注入.
 
-    Attributes:
-        _model: 訓練対象のモデル.
-        _criterion: 損失関数.
-        _metrics: 評価指標.
-        _optimizer: オプティマイザ.
-        _scheduler: 学習率スケジューラ.
-        _device: 使用デバイス.
-        _config: 設定辞書.
-        _enable_amp: AMP (混合精度訓練) の有効フラグ.
-        _scaler: GradScaler (AMP 有効時のみ).
+    訓練ループ・チェックポイント・履歴出力・Early Stopping を各部品に委譲し,
+    setup_training (コンストラクタ) → train() の API を提供する.
     """
 
     def __init__(
@@ -57,6 +57,7 @@ class PochiSegmentationTrainer:
         workspace_manager: PochiWorkspaceManager | None = None,
         early_stopping_patience: int | None = None,
         enable_amp: bool = False,
+        early_stopping_monitor: str = "mIoU",
     ) -> None:
         """PochiSegmentationTrainerを初期化.
 
@@ -70,9 +71,10 @@ class PochiSegmentationTrainer:
             config: 訓練設定 (PochiSegConfig, オプション).
             workspace_manager: ワークスペースマネージャ (オプション).
             early_stopping_patience: Early Stopping の patience (None または 0 で無効).
-            enable_amp: AMP (混合精度訓練) を有効化 (CUDA専用).
+            enable_amp: AMP (混合精度訓練) を有効化 (CUDA 専用).
+            early_stopping_monitor: ベスト判定 / Early Stopping の監視メトリクス
+                ("mIoU" / "Dice" / "val_loss").
         """
-        # ロガー (早めに初期化)
         logger_manager = LoggerManager()
         self._logger = logger_manager.get_logger("pochiseg")
 
@@ -83,19 +85,55 @@ class PochiSegmentationTrainer:
         self._scheduler = scheduler
         self._device = device
         self._config = config
-        self._workspace_manager = workspace_manager
-        self._early_stopping_patience = early_stopping_patience or 0
 
-        # AMP 設定 (CPU では無効)
+        # AMP 設定 (CPU では無効化し警告)
         if enable_amp and device == "cpu":
             self._logger.warning("AMP は CUDA でのみ有効です. 無効化します.")
             enable_amp = False
         self._enable_amp = enable_amp
-        self._scaler: GradScaler | None = GradScaler() if enable_amp else None
+        scaler: GradScaler | None = GradScaler() if enable_amp else None
 
-        # ベストスコア管理
-        self._best_miou = 0.0
-        self._best_epoch = 0
+        # 責務別の部品を組み立てる
+        self._checkpoint_store = CheckpointStore(
+            model=self._model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            device=device,
+            logger=self._logger,
+            workspace_manager=workspace_manager,
+            monitor=early_stopping_monitor,
+        )
+        self._epoch_runner = EpochRunner(
+            model=self._model,
+            criterion=criterion,
+            optimizer=optimizer,
+            device=device,
+            enable_amp=enable_amp,
+            scaler=scaler,
+        )
+        self._evaluator = Evaluator(
+            model=self._model,
+            criterion=criterion,
+            metrics=metrics,
+            device=device,
+            enable_amp=enable_amp,
+        )
+        self._metrics_tracker = MetricsTracker(
+            metrics=metrics,
+            logger=self._logger,
+            workspace_manager=workspace_manager,
+        )
+        patience = early_stopping_patience or 0
+        self._early_stopping: EarlyStopping | None = (
+            EarlyStopping(
+                patience=patience,
+                monitor=early_stopping_monitor,
+                logger=self._logger,
+            )
+            if patience > 0
+            else None
+        )
+        self._training_loop = TrainingLoop(self._logger)
 
     def train(
         self,
@@ -104,7 +142,7 @@ class PochiSegmentationTrainer:
         epochs: int = 50,
         stop_flag_callback: Callable[[], bool] | None = None,
     ) -> dict[str, list[float]]:
-        """訓練ループを実行.
+        """訓練ループを実行する.
 
         Args:
             train_loader: 訓練データローダー.
@@ -115,259 +153,35 @@ class PochiSegmentationTrainer:
         Returns:
             訓練履歴 (損失と評価指標).
         """
-        history: dict[str, list[float]] = {
-            "train_loss": [],
-            "val_miou": [],
-            "val_dice": [],
-            "learning_rate": [],
-        }
-
-        self._logger.info(f"訓練開始: {epochs} エポック")
-        if self._enable_amp:
-            self._logger.info("AMP (混合精度訓練) 有効")
-        if self._early_stopping_patience > 0:
-            self._logger.info(
-                f"Early Stopping: {self._early_stopping_patience} エポック改善なしで停止"
-            )
-
-        no_improvement_count = 0
-
-        for epoch in range(epochs):
-            # 停止フラグのチェック（エポック開始前）
-            if stop_flag_callback and stop_flag_callback():
-                self._logger.warning(
-                    f"安全停止が要求されました。エポック {epoch} で訓練を終了します。"
-                )
-                break
-
-            # 現在の学習率を記録
-            current_lr = self._optimizer.param_groups[0]["lr"]
-            history["learning_rate"].append(current_lr)
-
-            # 訓練フェーズ
-            train_loss = self._train_epoch(train_loader)
-            history["train_loss"].append(train_loss)
-
-            # 学習率と損失関数名を取得
-            lr_str = self._format_learning_rates()
-            loss_name = self._criterion.__class__.__name__
-
-            self._logger.info(
-                f"Epoch {epoch + 1}/{epochs} - "
-                f"{lr_str}, Train Loss ({loss_name}): {train_loss:.4f}"
-            )
-
-            # 検証フェーズ
-            if val_loader is not None:
-                val_metrics = self._validate(val_loader)
-                history["val_miou"].append(val_metrics.get("mIoU", 0.0))
-                history["val_dice"].append(val_metrics.get("Dice", 0.0))
-
-                self._logger.info(
-                    f"  Val mIoU: {val_metrics.get('mIoU', 0.0):.4f}, "
-                    f"Dice: {val_metrics.get('Dice', 0.0):.4f}"
-                )
-
-                # ベストモデルの保存と改善チェック
-                improved = self._save_best_model(val_metrics, epoch)
-                if improved:
-                    no_improvement_count = 0
-                else:
-                    no_improvement_count += 1
-
-                # Early Stopping チェック
-                if (
-                    self._early_stopping_patience > 0
-                    and no_improvement_count >= self._early_stopping_patience
-                ):
-                    self._logger.info(
-                        f"Early Stopping: {no_improvement_count} エポック改善なし, "
-                        f"訓練を終了します"
-                    )
-                    break
-
-            # スケジューラ更新
-            if self._scheduler is not None:
-                if isinstance(self._scheduler, ReduceLROnPlateau):
-                    # ReduceLROnPlateau は監視する指標を渡す必要がある
-                    val_miou = val_metrics.get("mIoU", 0.0) if val_loader else 0.0
-                    self._scheduler.step(val_miou)
-                else:
-                    self._scheduler.step()
-
-            # ラストモデルの保存（毎エポック上書き）
-            self.save_last_model()
-
-            # 停止フラグのチェック（エポック完了後）
-            if stop_flag_callback and stop_flag_callback():
-                self._logger.warning(
-                    f"安全停止が要求されました。エポック {epoch + 1} で訓練を終了します。"
-                )
-                break
-
-        self._logger.info(
-            f"訓練完了. Best mIoU: {self._best_miou:.4f} (Epoch {self._best_epoch + 1})"
+        ctx = TrainingContext(
+            optimizer=self._optimizer,
+            scheduler=self._scheduler,
+            criterion=self._criterion,
+            epoch_runner=self._epoch_runner,
+            evaluator=self._evaluator,
+            checkpoint_store=self._checkpoint_store,
+            metrics_tracker=self._metrics_tracker,
+            early_stopping=self._early_stopping,
+            enable_amp=self._enable_amp,
+        )
+        return self._training_loop.run(
+            ctx,
+            train_loader,
+            val_loader,
+            epochs=epochs,
+            stop_flag_callback=stop_flag_callback,
         )
 
-        # 訓練履歴を可視化
-        self._save_training_history(history)
-
-        # クラス別精度を可視化
-        self._save_class_metrics()
-
-        return history
-
-    def _format_learning_rates(self) -> str:
-        """学習率を表示用にフォーマット.
-
-        層別学習率が有効な場合は encoder/decoder の両方を表示.
-
-        Returns:
-            フォーマットされた学習率文字列.
-        """
-        param_groups = self._optimizer.param_groups
-        if len(param_groups) >= 2:
-            # 層別学習率: encoder (group 0), decoder (group 1)
-            enc_lr = param_groups[0]["lr"]
-            dec_lr = param_groups[1]["lr"]
-            return f"LR: enc={enc_lr:.6f}, dec={dec_lr:.6f}"
-        else:
-            # 単一学習率
-            lr = param_groups[0]["lr"]
-            return f"LR: {lr:.6f}"
-
-    def _train_epoch(
-        self, loader: DataLoader[tuple[torch.Tensor, torch.Tensor]]
-    ) -> float:
-        """1エポックの訓練を実行.
-
-        Args:
-            loader: 訓練データローダー.
-
-        Returns:
-            平均訓練損失.
-        """
-        self._model.train()
-        total_loss = 0.0
-
-        for images, masks in loader:
-            images = images.to(self._device)
-            masks = masks.to(self._device)
-
-            self._optimizer.zero_grad()
-
-            # AMP 対応
-            if self._enable_amp and self._scaler is not None:
-                with autocast(device_type="cuda"):
-                    outputs = self._model(images)
-                    loss = self._criterion(outputs, masks)
-                self._scaler.scale(loss).backward()
-                self._scaler.step(self._optimizer)
-                self._scaler.update()
-            else:
-                outputs = self._model(images)
-                loss = self._criterion(outputs, masks)
-                loss.backward()
-                self._optimizer.step()
-
-            total_loss += loss.item()
-
-        return total_loss / len(loader)
-
-    def _validate(
-        self, loader: DataLoader[tuple[torch.Tensor, torch.Tensor]]
-    ) -> dict[str, float]:
-        """検証を実行.
-
-        Args:
-            loader: 検証データローダー.
-
-        Returns:
-            評価指標の辞書.
-        """
-        self._model.eval()
-        self._metrics.reset()
-
-        with torch.no_grad():
-            for images, masks in loader:
-                images = images.to(self._device)
-                masks = masks.to(self._device)
-
-                # AMP 対応 (autocast のみ, GradScaler 不要)
-                if self._enable_amp:
-                    with autocast(device_type="cuda"):
-                        outputs = self._model(images)
-                else:
-                    outputs = self._model(images)
-
-                preds = outputs.argmax(dim=1)
-                self._metrics.update(preds, masks)
-
-        return self._metrics.compute()
-
-    def _save_best_model(self, metrics: dict[str, float], epoch: int) -> bool:
-        """ベストモデルを保存.
-
-        Args:
-            metrics: 評価指標の辞書.
-            epoch: 現在のエポック.
-
-        Returns:
-            True if improved, False otherwise.
-        """
-        miou = metrics.get("mIoU", 0.0)
-        if miou > self._best_miou:
-            self._best_miou = miou
-            self._best_epoch = epoch
-
-            if self._workspace_manager is not None:
-                models_dir = self._workspace_manager.get_models_dir()
-                model_path = models_dir / "best.pth"
-                self._save_checkpoint(model_path, epoch, metrics)
-                self._logger.info(f"ベストモデルを保存: {model_path}")
-            return True
-        return False
-
-    def _save_checkpoint(
-        self, path: Path, epoch: int, metrics: dict[str, float]
-    ) -> None:
-        """チェックポイントを保存.
-
-        Args:
-            path: 保存先パス.
-            epoch: エポック番号.
-            metrics: 評価指標.
-        """
-        checkpoint = {
-            "epoch": epoch,
-            "model_state_dict": self._model.state_dict(),
-            "optimizer_state_dict": self._optimizer.state_dict(),
-            "metrics": metrics,
-            "best_miou": self._best_miou,
-        }
-
-        if self._scheduler is not None:
-            checkpoint["scheduler_state_dict"] = self._scheduler.state_dict()
-
-        torch.save(checkpoint, path)
-
     def save_last_model(self) -> Path | None:
-        """最終モデルを保存.
+        """最終モデルを保存する.
 
         Returns:
-            保存先パス, ワークスペースマネージャがない場合はNone.
+            保存先パス, ワークスペースマネージャがない場合は None.
         """
-        if self._workspace_manager is None:
-            return None
-
-        models_dir = self._workspace_manager.get_models_dir()
-        model_path = models_dir / "last.pth"
-        self._save_checkpoint(model_path, self._best_epoch, {"mIoU": self._best_miou})
-        self._logger.info(f"最終モデルを保存: {model_path}")
-        return model_path
+        return self._checkpoint_store.save_last()
 
     def load_checkpoint(self, path: Path) -> dict[str, Any]:
-        """チェックポイントを読み込み.
+        """チェックポイントを読み込む.
 
         Args:
             path: チェックポイントファイルパス.
@@ -375,66 +189,7 @@ class PochiSegmentationTrainer:
         Returns:
             チェックポイント情報.
         """
-        checkpoint: dict[str, Any] = torch.load(path, map_location=self._device)
-
-        self._model.load_state_dict(checkpoint["model_state_dict"])
-        self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-
-        if self._scheduler is not None and "scheduler_state_dict" in checkpoint:
-            self._scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-
-        self._best_miou = checkpoint.get("best_miou", 0.0)
-        self._best_epoch = checkpoint.get("epoch", 0)
-
-        self._logger.info(
-            f"チェックポイントを読み込み: {path} (Epoch {self._best_epoch + 1})"
-        )
-
-        return checkpoint
-
-    def _save_training_history(self, history: dict[str, list[float]]) -> None:
-        """訓練履歴をCSVとグラフで保存.
-
-        SegmentationMetricsExporter に処理を委譲.
-
-        Args:
-            history: 訓練履歴の辞書.
-        """
-        if self._workspace_manager is None:
-            return
-
-        vis_dir = self._workspace_manager.get_visualization_dir()
-
-        # SegmentationMetricsExporter に委譲
-        exporter = SegmentationMetricsExporter(
-            output_dir=vis_dir,
-            logger=self._logger,
-        )
-        exporter.export_all(history)
-
-    def _save_class_metrics(self) -> None:
-        """クラス別精度を可視化・保存.
-
-        ClassMetricsVisualizer に処理を委譲.
-        """
-        if self._workspace_manager is None:
-            return
-
-        # compute_class_metrics メソッドが存在するか確認
-        if not hasattr(self._metrics, "compute_class_metrics"):
-            return
-
-        vis_dir = self._workspace_manager.get_visualization_dir()
-
-        # クラス別精度を計算
-        class_metrics = self._metrics.compute_class_metrics()
-
-        # 可視化
-        visualizer = ClassMetricsVisualizer(vis_dir)
-        paths = visualizer.export_all(class_metrics)
-
-        self._logger.info(f"クラス別精度を保存: {paths['class_iou_chart']}")
-        self._logger.info(f"Confusion Matrix を保存: {paths['confusion_matrix']}")
+        return self._checkpoint_store.load(path)
 
     @property
     def model(self) -> nn.Module:
@@ -447,12 +202,12 @@ class PochiSegmentationTrainer:
 
     @property
     def best_miou(self) -> float:
-        """ベストmIoUを取得.
+        """ベスト指標値を取得.
 
         Returns:
-            ベストmIoU値.
+            ベスト監視メトリクス値 (既定では mIoU).
         """
-        return self._best_miou
+        return self._checkpoint_store.best_value
 
     @property
     def best_epoch(self) -> int:
@@ -461,4 +216,4 @@ class PochiSegmentationTrainer:
         Returns:
             ベストエポック番号.
         """
-        return self._best_epoch
+        return self._checkpoint_store.best_epoch

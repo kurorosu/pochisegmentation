@@ -173,6 +173,7 @@ def run_training(
         workspace_manager=workspace_manager,
         early_stopping_patience=config.early_stopping_patience,
         enable_amp=config.enable_amp,
+        early_stopping_monitor=config.early_stopping_monitor,
     )
 
     # 訓練実行
