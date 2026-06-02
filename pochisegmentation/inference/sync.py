@@ -1,6 +1,8 @@
-"""セグメンテーション推論クラス.
+"""セグメンテーション同期推論.
 
-学習済みモデルを使用して画像のセグメンテーション推論を行う.
+学習済みモデルで単一画像 / バッチ推論を行う PochiSegmentationPredictor を提供する.
+前処理は inference.preprocess, チェックポイント読み込みは
+inference.checkpoint_loader に委譲する.
 """
 
 from pathlib import Path
@@ -12,10 +14,13 @@ import torch
 from numpy.typing import NDArray
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision import tv_tensors
 from torchvision.transforms import v2
 
+from pochisegmentation.inference.checkpoint_loader import load_model_weights
+from pochisegmentation.inference.preprocess import preprocess_image
 from pochisegmentation.interfaces.model import ISegmentationModel
+
+__all__ = ["PochiSegmentationPredictor"]
 
 
 class PochiSegmentationPredictor:
@@ -39,7 +44,7 @@ class PochiSegmentationPredictor:
 
         Args:
             model: セグメンテーションモデル.
-            transform: 推論時に適用するtransform (v2.Compose).
+            transform: 推論時に適用する transform (v2.Compose).
             device: 使用デバイス ("cuda" or "cpu").
         """
         self._model: nn.Module = model.to(device)
@@ -54,7 +59,7 @@ class PochiSegmentationPredictor:
             image_path: 入力画像のパス.
 
         Returns:
-            予測マスク (H, W) のnumpy配列, クラスインデックス.
+            予測マスク (H, W) の numpy 配列, クラスインデックス.
 
         Raises:
             FileNotFoundError: 画像ファイルが存在しない場合.
@@ -73,16 +78,16 @@ class PochiSegmentationPredictor:
         return self.predict_image(image_rgb)
 
     def predict_image(self, image: NDArray[np.uint8]) -> NDArray[np.uint8]:
-        """numpy配列の画像から推論を実行.
+        """入力 numpy 配列から推論を実行.
 
         Args:
-            image: 入力画像 (H, W, C) のnumpy配列, RGB形式.
+            image: 入力画像 (H, W, C) の numpy 配列, RGB 形式.
 
         Returns:
-            予測マスク (H, W) のnumpy配列, クラスインデックス.
+            予測マスク (H, W) の numpy 配列, クラスインデックス.
         """
         # 前処理
-        input_tensor = self._preprocess(image)
+        input_tensor = preprocess_image(image, self._transform)
 
         # 推論
         with torch.no_grad():
@@ -106,7 +111,7 @@ class PochiSegmentationPredictor:
 
         with torch.no_grad():
             for batch in loader:
-                # DataLoaderは (images, masks) または (images,) を返す可能性がある
+                # DataLoader は (images, masks) または (images,) を返す可能性がある
                 if isinstance(batch, (list, tuple)):
                     images = batch[0]
                 else:
@@ -120,25 +125,6 @@ class PochiSegmentationPredictor:
 
         return results
 
-    def _preprocess(self, image: NDArray[np.uint8]) -> torch.Tensor:
-        """画像の前処理を実行.
-
-        Args:
-            image: 入力画像 (H, W, C) のnumpy配列, RGB形式.
-
-        Returns:
-            前処理済みテンソル (1, C, H, W).
-        """
-        # numpy配列をtv_tensors.Imageに変換
-        # (H, W, C) -> (C, H, W)
-        image_tensor = tv_tensors.Image(image.transpose(2, 0, 1))
-
-        # transform適用
-        transformed: torch.Tensor = self._transform(image_tensor)
-
-        # バッチ次元を追加
-        return transformed.unsqueeze(0)
-
     @classmethod
     def from_checkpoint(
         cls,
@@ -147,29 +133,21 @@ class PochiSegmentationPredictor:
         transform: v2.Compose,
         device: str = "cuda",
     ) -> "PochiSegmentationPredictor":
-        """チェックポイントからPredictorを作成.
+        """チェックポイントから Predictor を作成.
 
         Args:
             checkpoint_path: チェックポイントファイルのパス.
             model: モデルインスタンス (重みはチェックポイントから読み込まれる).
-            transform: 推論時に適用するtransform.
+            transform: 推論時に適用する transform.
             device: 使用デバイス.
 
         Returns:
-            初期化されたPredictor.
+            初期化された Predictor.
 
         Raises:
             FileNotFoundError: チェックポイントファイルが存在しない場合.
         """
-        checkpoint_path = Path(checkpoint_path)
-        if not checkpoint_path.exists():
-            raise FileNotFoundError(
-                f"チェックポイントファイルが見つかりません: {checkpoint_path}"
-            )
-
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        model.load_state_dict(checkpoint["model_state_dict"])
-
+        load_model_weights(checkpoint_path, model, device)
         return cls(model=model, transform=transform, device=device)
 
     @property

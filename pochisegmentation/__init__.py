@@ -3,6 +3,7 @@
 __version__ = "1.0.0"
 
 from pochisegmentation.factories.component_factory import ComponentFactory
+from pochisegmentation.inference import PochiSegmentationPredictor
 from pochisegmentation.losses.seg_losses import (
     CombinedLoss,
     DiceLoss,
@@ -12,7 +13,6 @@ from pochisegmentation.losses.seg_losses import (
 from pochisegmentation.metrics.seg_metrics import SegmentationMetrics
 from pochisegmentation.models.deeplabv3plus import DeepLabV3PlusModel
 from pochisegmentation.models.unet import UnetModel
-from pochisegmentation.seg_predictor import PochiSegmentationPredictor
 from pochisegmentation.seg_trainer import PochiSegmentationTrainer
 
 # モデル登録
