@@ -15,16 +15,13 @@ from torchvision.transforms import v2
 
 from pochisegmentation import ComponentFactory, PochiSegmentationPredictor
 from pochisegmentation.exceptions import PochiConfigError
+from pochisegmentation.inference.postprocess import save_prediction
 from pochisegmentation.logging.logger_manager import LoggerManager
 from pochisegmentation.utils.config_loader import ConfigLoader
 from pochisegmentation.utils.timestamp_utils import (
     find_next_index,
     format_workspace_name,
     get_current_date_str,
-)
-from pochisegmentation.visualization.mask_visualizer import (
-    colorize_mask,
-    overlay_mask_on_image,
 )
 
 
@@ -160,21 +157,14 @@ def run_inference(
         # 推論
         mask = predictor.predict(image_path)
 
-        # 1. カラーマスク単体を保存
-        color_mask = colorize_mask(mask, num_classes=num_classes)
-        mask_output_path = resolved_output_dir / f"{image_path.stem}_mask.png"
-        cv2.imwrite(str(mask_output_path), cv2.cvtColor(color_mask, cv2.COLOR_RGB2BGR))
-        logger.info(f"マスク保存: {mask_output_path}")
-
-        # 2. 元画像にオーバーレイした画像を保存
-        overlay = overlay_mask_on_image(
-            cast(NDArray[np.uint8], original_image),
-            mask,
-            alpha=0.5,
+        # カラーマスク / オーバーレイの保存
+        save_prediction(
+            mask=mask,
+            original_image=cast(NDArray[np.uint8], original_image),
+            output_dir=resolved_output_dir,
+            stem=image_path.stem,
             num_classes=num_classes,
+            logger=logger,
         )
-        vis_output_path = resolved_output_dir / f"{image_path.stem}_vis.png"
-        cv2.imwrite(str(vis_output_path), cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
-        logger.info(f"オーバーレイ保存: {vis_output_path}")
 
     logger.info("推論完了!")

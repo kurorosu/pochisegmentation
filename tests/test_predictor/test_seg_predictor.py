@@ -10,8 +10,8 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision.transforms import v2
 
+from pochisegmentation.inference import PochiSegmentationPredictor
 from pochisegmentation.interfaces.model import ISegmentationModel
-from pochisegmentation.seg_predictor import PochiSegmentationPredictor
 
 
 class MockModel(ISegmentationModel):

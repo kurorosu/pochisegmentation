@@ -25,7 +25,8 @@
 - CLI エントリを `pochisegmentation/cli/pochi.py` に移植し `[project.scripts]` で `uv run pochi` を提供 ([#46](https://github.com/kurorosu/pochisegmentation/pull/46))
 - pytest `addopts` に `-n auto --dist=worksteal` と `markers` を追加 ([#46](https://github.com/kurorosu/pochisegmentation/pull/46))
 - dict ベースの設定を Pydantic v2 の `PochiSegConfig` に置換し, factories / core から dict 直アクセスを排除 ([#49](https://github.com/kurorosu/pochisegmentation/pull/49))
-- モノリシックな `seg_trainer.py` を `pochisegmentation/training/` 配下の責務別部品 (EpochRunner / Evaluator / CheckpointStore / MetricsTracker / EarlyStopping / TrainingLoop) に分解し, `PochiSegmentationTrainer` を薄いファサードに縮退. ベスト指標と Early Stopping を `early_stopping_monitor` (mIoU / Dice / val_loss) で統一 (NA.)
+- モノリシックな `seg_trainer.py` を `pochisegmentation/training/` 配下の責務別部品 (EpochRunner / Evaluator / CheckpointStore / MetricsTracker / EarlyStopping / TrainingLoop) に分解し, `PochiSegmentationTrainer` を薄いファサードに縮退. ベスト指標と Early Stopping を `early_stopping_monitor` (mIoU / Dice / val_loss) で統一 ([#50](https://github.com/kurorosu/pochisegmentation/pull/50))
+- 単一ファイルの `seg_predictor.py` を `pochisegmentation/inference/` パッケージ (preprocess / sync / checkpoint_loader / postprocess) に分解し, `core/inference.py` をオーケストレーションのみに縮退 (NA.)
 
 ### Fixed
 
