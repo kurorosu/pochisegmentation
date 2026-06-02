@@ -1,82 +1,18 @@
-"""PochiSegmentationTrainerのテスト."""
+"""PochiSegmentationTrainer (ファサード) のテスト."""
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import pytest
 import torch
-from torch.utils.data import DataLoader, TensorDataset
 
-from pochisegmentation.interfaces.loss import ISegmentationLoss
-from pochisegmentation.interfaces.metrics import ISegmentationMetrics
-from pochisegmentation.interfaces.model import ISegmentationModel
 from pochisegmentation.seg_trainer import PochiSegmentationTrainer
 from pochisegmentation.utils.directory_manager import PochiWorkspaceManager
 
-
-class MockModel(ISegmentationModel):
-    """テスト用モックモデル."""
-
-    def __init__(self, num_classes: int = 4) -> None:
-        """MockModelを初期化."""
-        super().__init__()
-        self.num_classes = num_classes
-        self.conv = torch.nn.Conv2d(3, num_classes, kernel_size=1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """順伝播."""
-        return self.conv(x)
-
-    def get_encoder_params(self) -> list:
-        """エンコーダーパラメータを取得."""
-        return []
-
-    def get_decoder_params(self) -> list:
-        """デコーダーパラメータを取得."""
-        return list(self.conv.parameters())
-
-
-class MockLoss(ISegmentationLoss):
-    """テスト用モック損失関数."""
-
-    def __call__(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """損失を計算."""
-        return torch.nn.functional.cross_entropy(pred, target)
-
-
-class MockMetrics(ISegmentationMetrics):
-    """テスト用モック評価指標."""
-
-    def __init__(self) -> None:
-        """MockMetricsを初期化."""
-        self._count = 0
-
-    def update(self, preds: torch.Tensor, targets: torch.Tensor) -> None:
-        """バッチ結果を蓄積."""
-        self._count += 1
-
-    def compute(self) -> dict[str, float]:
-        """指標を計算."""
-        return {"mIoU": 0.5, "Dice": 0.6}
-
-    def reset(self) -> None:
-        """リセット."""
-        self._count = 0
-
-
-def create_dummy_dataloader(
-    batch_size: int = 2, num_samples: int = 8
-) -> DataLoader[tuple[torch.Tensor, torch.Tensor]]:
-    """ダミーデータローダーを作成."""
-    images = torch.randn(num_samples, 3, 32, 32)
-    masks = torch.randint(0, 4, (num_samples, 32, 32))
-    dataset = TensorDataset(images, masks)
-    return DataLoader(dataset, batch_size=batch_size)
+from ._helpers import MockLoss, MockMetrics, MockModel, create_dummy_dataloader
 
 
 class TestPochiSegmentationTrainer:
-    """PochiSegmentationTrainerのテストクラス."""
+    """PochiSegmentationTrainer のテストクラス."""
 
     def test_init(self) -> None:
         """初期化テスト."""
@@ -141,7 +77,9 @@ class TestPochiSegmentationTrainer:
         assert "train_loss" in history
         assert "val_miou" in history
         assert "val_dice" in history
+        assert "val_loss" in history
         assert len(history["val_miou"]) == 2
+        assert len(history["val_loss"]) == 2
 
     def test_train_with_scheduler(self) -> None:
         """スケジューラ付き訓練テスト."""
@@ -184,13 +122,39 @@ class TestPochiSegmentationTrainer:
         val_loader = create_dummy_dataloader()
         trainer.train(train_loader, val_loader=val_loader, epochs=1)
 
-        # MockMetricsは常にmIoU=0.5を返すので, best_miouは0.5になる
+        # MockMetrics は常に mIoU=0.5 を返すので, best_miou は 0.5 になる
         assert trainer.best_miou == 0.5
         assert trainer.best_epoch == 0
+
+    def test_early_stopping_monitor_val_loss(self) -> None:
+        """val_loss を監視指標に指定すると best_miou が val_loss を保持する."""
+        model = MockModel()
+        criterion = MockLoss()
+        metrics = MockMetrics()
+        optimizer = torch.optim.Adam(model.parameters())
+
+        trainer = PochiSegmentationTrainer(
+            model=model,
+            criterion=criterion,
+            metrics=metrics,
+            optimizer=optimizer,
+            device="cpu",
+            early_stopping_monitor="val_loss",
+        )
+
+        train_loader = create_dummy_dataloader()
+        val_loader = create_dummy_dataloader()
+        history = trainer.train(train_loader, val_loader=val_loader, epochs=1)
+
+        # val_loss 監視では最小の val_loss がベスト値として保持される
+        assert trainer.best_miou == history["val_loss"][0]
 
     def test_save_and_load_checkpoint(self) -> None:
         """チェックポイントの保存と読み込みテスト."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            workspace_manager = PochiWorkspaceManager(base_dir=tmpdir)
+            workspace_manager.create_workspace()
+
             model = MockModel()
             criterion = MockLoss()
             metrics = MockMetrics()
@@ -202,18 +166,20 @@ class TestPochiSegmentationTrainer:
                 metrics=metrics,
                 optimizer=optimizer,
                 device="cpu",
+                workspace_manager=workspace_manager,
             )
 
-            # 訓練してチェックポイント保存
-            checkpoint_path = Path(tmpdir) / "checkpoint.pth"
-            trainer._best_miou = 0.75
-            trainer._best_epoch = 5
-            trainer._save_checkpoint(checkpoint_path, 5, {"mIoU": 0.75})
+            # 検証付きで訓練し best.pth を保存 (best_miou=0.5)
+            train_loader = create_dummy_dataloader()
+            val_loader = create_dummy_dataloader()
+            trainer.train(train_loader, val_loader=val_loader, epochs=1)
+
+            best_path = workspace_manager.get_models_dir() / "best.pth"
+            assert best_path.exists()
 
             # 新しいトレーナーでチェックポイント読み込み
             model2 = MockModel()
             optimizer2 = torch.optim.Adam(model2.parameters())
-
             trainer2 = PochiSegmentationTrainer(
                 model=model2,
                 criterion=criterion,
@@ -222,12 +188,12 @@ class TestPochiSegmentationTrainer:
                 device="cpu",
             )
 
-            loaded = trainer2.load_checkpoint(checkpoint_path)
+            loaded = trainer2.load_checkpoint(best_path)
 
-            assert loaded["epoch"] == 5
-            assert loaded["best_miou"] == 0.75
-            assert trainer2.best_miou == 0.75
-            assert trainer2.best_epoch == 5
+            assert loaded["epoch"] == 0
+            assert loaded["best_miou"] == 0.5
+            assert trainer2.best_miou == 0.5
+            assert trainer2.best_epoch == 0
 
     def test_with_workspace_manager(self) -> None:
         """ワークスペースマネージャとの統合テスト."""
@@ -237,7 +203,6 @@ class TestPochiSegmentationTrainer:
 
             model = MockModel()
             criterion = MockLoss()
-            # mIoUを高くしてベストモデル保存をトリガー
             metrics = MockMetrics()
             optimizer = torch.optim.Adam(model.parameters())
 
@@ -257,6 +222,7 @@ class TestPochiSegmentationTrainer:
             # ベストモデルが保存されているか確認
             models_dir = workspace_manager.get_models_dir()
             assert (models_dir / "best.pth").exists()
+            assert (models_dir / "last.pth").exists()
 
     def test_save_last_model(self) -> None:
         """最終モデル保存テスト."""
@@ -302,7 +268,7 @@ class TestPochiSegmentationTrainer:
         assert path is None
 
     def test_property_model(self) -> None:
-        """modelプロパティのテスト."""
+        """model プロパティのテスト."""
         model = MockModel()
         criterion = MockLoss()
         metrics = MockMetrics()
@@ -317,3 +283,107 @@ class TestPochiSegmentationTrainer:
         )
 
         assert trainer.model is model
+
+    def test_amp_disabled_on_cpu(self) -> None:
+        """CPU では AMP が自動無効化される."""
+        model = MockModel()
+        criterion = MockLoss()
+        metrics = MockMetrics()
+        optimizer = torch.optim.Adam(model.parameters())
+
+        trainer = PochiSegmentationTrainer(
+            model=model,
+            criterion=criterion,
+            metrics=metrics,
+            optimizer=optimizer,
+            device="cpu",
+            enable_amp=True,
+        )
+
+        # CPU では AMP は無効化され, 訓練が正常に完了する
+        assert trainer._enable_amp is False
+        train_loader = create_dummy_dataloader()
+        history = trainer.train(train_loader, epochs=1)
+        assert len(history["train_loss"]) == 1
+
+
+class TestStopFlag:
+    """停止フラグによる安全停止のテスト."""
+
+    def test_stop_before_first_epoch(self) -> None:
+        """開始前に停止フラグが立つと訓練が即終了する."""
+        model = MockModel()
+        criterion = MockLoss()
+        metrics = MockMetrics()
+        optimizer = torch.optim.Adam(model.parameters())
+
+        trainer = PochiSegmentationTrainer(
+            model=model,
+            criterion=criterion,
+            metrics=metrics,
+            optimizer=optimizer,
+            device="cpu",
+        )
+
+        train_loader = create_dummy_dataloader()
+        history = trainer.train(train_loader, epochs=5, stop_flag_callback=lambda: True)
+
+        # 1 エポックも実行されない
+        assert len(history["train_loss"]) == 0
+
+    def test_stop_after_first_epoch(self) -> None:
+        """1エポック完了後に停止フラグが立つと終了する."""
+        model = MockModel()
+        criterion = MockLoss()
+        metrics = MockMetrics()
+        optimizer = torch.optim.Adam(model.parameters())
+
+        trainer = PochiSegmentationTrainer(
+            model=model,
+            criterion=criterion,
+            metrics=metrics,
+            optimizer=optimizer,
+            device="cpu",
+        )
+
+        calls = {"count": 0}
+
+        def stop_after_one() -> bool:
+            # エポック開始前チェックは False, 完了後チェックで True を返す
+            calls["count"] += 1
+            return calls["count"] > 1
+
+        train_loader = create_dummy_dataloader()
+        history = trainer.train(
+            train_loader, epochs=5, stop_flag_callback=stop_after_one
+        )
+
+        assert len(history["train_loss"]) == 1
+
+
+class TestEarlyStoppingIntegration:
+    """Early Stopping のファサード統合テスト."""
+
+    def test_early_stopping_triggers(self) -> None:
+        """改善しないと patience 経過で訓練が打ち切られる."""
+        model = MockModel()
+        criterion = MockLoss()
+        # 常に同じ mIoU=0.5 を返すので, 2 エポック目以降は改善なし
+        metrics = MockMetrics()
+        optimizer = torch.optim.Adam(model.parameters())
+
+        trainer = PochiSegmentationTrainer(
+            model=model,
+            criterion=criterion,
+            metrics=metrics,
+            optimizer=optimizer,
+            device="cpu",
+            early_stopping_patience=1,
+        )
+
+        train_loader = create_dummy_dataloader()
+        val_loader = create_dummy_dataloader()
+        history = trainer.train(train_loader, val_loader=val_loader, epochs=10)
+
+        # epoch0: best 更新, epoch1: 改善なし counter=1>=1 で停止
+        assert len(history["val_miou"]) == 2
