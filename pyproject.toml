@@ -3,12 +3,14 @@ name = "pochisegmentation"
 version = "1.0.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "torch",
     "torchvision",
     "segmentation-models-pytorch",
     "torchmetrics",
+    # numpy 2.3 以降が Python 3.14 の公式 Windows wheel を提供する (2.2.x は sdist のみで segfault).
+    "numpy>=2.3",
     "opencv-python",
     "matplotlib>=3.10.8",
     "questionary>=2.0.0",
@@ -46,14 +48,14 @@ dev = [
 
 [tool.black]
 line-length = 88
-target-version = ["py313"]
+target-version = ["py314"]
 
 [tool.isort]
 profile = "black"
 line_length = 88
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
