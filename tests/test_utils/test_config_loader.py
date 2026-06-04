@@ -66,7 +66,6 @@ num_classes = 4
         config_path = tmp_path / "config.py"
         config_path.write_text(
             """
-# data_root と num_classes がない
 architecture = "Unet"
 """
         )
@@ -84,7 +83,6 @@ architecture = "Unet"
         config_path.write_text(
             """
 data_root = "data/train"
-# num_classes がない
 """
         )
 
@@ -100,7 +98,7 @@ data_root = "data/train"
             """
 data_root = "data/train"
 num_classes = 4
-architecture = "unet"  # 小文字は不正
+architecture = "unet"
 """
         )
 
@@ -116,7 +114,7 @@ architecture = "unet"  # 小文字は不正
             """
 data_root = "data/train"
 num_classes = 4
-optimizer = "RMSprop"  # 未対応
+optimizer = "RMSprop"
 """
         )
 
@@ -132,7 +130,7 @@ optimizer = "RMSprop"  # 未対応
             """
 data_root = "data/train"
 num_classes = 4
-loss = "CrossEntropyLoss"  # 未対応
+loss = "CrossEntropyLoss"
 """
         )
 
@@ -148,7 +146,7 @@ loss = "CrossEntropyLoss"  # 未対応
             """
 data_root = "data/train"
 num_classes = 4
-device = "tpu"  # 未対応
+device = "tpu"
 """
         )
 
@@ -163,7 +161,7 @@ device = "tpu"  # 未対応
         config_path.write_text(
             """
 data_root = "data/train"
-num_classes = "abc"  # 数値化できない文字列は不正
+num_classes = "abc"
 """
         )
 
@@ -178,7 +176,7 @@ num_classes = "abc"  # 数値化できない文字列は不正
         config_path.write_text(
             """
 data_root = "data/train"
-num_classes = 0  # gt=0 制約に違反
+num_classes = 0
 """
         )
 
@@ -194,7 +192,7 @@ num_classes = 0  # gt=0 制約に違反
             """
 data_root = "data/train"
 num_classes = 4
-learning_rate = 1  # intでもOK (floatに変換)
+learning_rate = 1
 """
         )
 
@@ -237,7 +235,7 @@ scheduler = None
 data_root = "data/train"
 num_classes = 4
 scheduler = "CosineAnnealingLR"
-scheduler_params = {}  # T_max がない
+scheduler_params = {}
 """
         )
 
