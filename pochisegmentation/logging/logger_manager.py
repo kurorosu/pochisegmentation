@@ -53,8 +53,8 @@ class LoggerManager:
 
         self._default_level = LogLevel.INFO
         self._format_string = (
-            "[%(asctime)s][%(log_color)s%(levelname)s%(reset)s]"
-            "[%(name)s][%(filename)s:%(lineno)d] %(message)s"
+            "%(asctime)s|%(log_color)s%(levelname)-5.5s%(reset)s|"
+            "%(module)-18s|%(lineno)03d| %(message)s"
         )
         self._date_format = "%Y-%m-%d %H:%M:%S"
         self._log_colors = {
@@ -80,7 +80,7 @@ class LoggerManager:
             >>> manager = LoggerManager()
             >>> logger = manager.get_logger("pochiseg")
             >>> logger.info("ログメッセージ")
-            [2025-07-14 18:37:48,735][INFO][pochiseg][main.py:123] ログメッセージ.
+            2025-07-14 18:37:48|INFO |seg_trainer       |123| ログメッセージ
         """
         if name in self._loggers:
             return self._loggers[name]
@@ -125,6 +125,7 @@ class LoggerManager:
             logging.Handler: 作成されたハンドラー.
         """
         handler: logging.Handler
+        formatter: logging.Formatter
         if COLORLOG_AVAILABLE:
             handler = colorlog.StreamHandler()
             formatter = colorlog.ColoredFormatter(
@@ -136,8 +137,8 @@ class LoggerManager:
             handler = logging.StreamHandler()
             # colorlogが利用できない場合は色情報を除去したフォーマット
             plain_format = (
-                "[%(asctime)s][%(levelname)s][%(name)s]"
-                "[%(filename)s:%(lineno)d] %(message)s"
+                "%(asctime)s|%(levelname)-5.5s|"
+                "%(module)-18s|%(lineno)03d| %(message)s"
             )
             formatter = logging.Formatter(
                 plain_format,
