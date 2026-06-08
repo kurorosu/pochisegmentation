@@ -43,8 +43,12 @@ class SegmentationMetrics(ISegmentationMetrics):
         self._class_names = class_names
         self._device = device
 
-        self._iou = MeanIoU(num_classes=num_classes).to(device)
-        self._dice = DiceScore(num_classes=num_classes, average="macro").to(device)
+        # input_format="index": preds/targets はクラスインデックス (B, H, W) で渡す.
+        # 既定の "one-hot" のままだと index 入力が誤解釈され指標が壊れる.
+        self._iou = MeanIoU(num_classes=num_classes, input_format="index").to(device)
+        self._dice = DiceScore(
+            num_classes=num_classes, average="macro", input_format="index"
+        ).to(device)
         self._pixel_accuracy = Accuracy(task="multiclass", num_classes=num_classes).to(
             device
         )

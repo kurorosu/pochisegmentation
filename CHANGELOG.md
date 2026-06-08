@@ -28,7 +28,7 @@
 - モノリシックな `seg_trainer.py` を `pochisegmentation/training/` 配下の責務別部品 (EpochRunner / Evaluator / CheckpointStore / MetricsTracker / EarlyStopping / TrainingLoop) に分解し, `PochiSegmentationTrainer` を薄いファサードに縮退. ベスト指標と Early Stopping を `early_stopping_monitor` (mIoU / Dice / val_loss) で統一 ([#50](https://github.com/kurorosu/pochisegmentation/pull/50))
 - 単一ファイルの `seg_predictor.py` を `pochisegmentation/inference/` パッケージ (preprocess / sync / checkpoint_loader / postprocess) に分解し, `core/inference.py` をオーケストレーションのみに縮退 ([#51](https://github.com/kurorosu/pochisegmentation/pull/51))
 - 開発・実行環境の Python を 3.13 から 3.14 に引き上げ (`.python-version` / `requires-python` / black / mypy). 併せて 3.14 の Windows 公式 wheel を持つ `numpy>=2.3` に更新し, テスト生成 config から非 ASCII コメントを除去 ([#53](https://github.com/kurorosu/pochisegmentation/pull/53))
-- ロガーの出力形式を pochidetection に合わせてパイプ区切りに変更 (`asctime|level|module|lineno| message`, レベル名 5 文字固定 / 行番号 3 桁ゼロ埋め). 色付き出力のため `colorlog` を依存に追加 (NA.)
+- ロガーの出力形式を pochidetection に合わせてパイプ区切りに変更 (`asctime|level|module|lineno| message`, レベル名 5 文字固定 / 行番号 3 桁ゼロ埋め). 色付き出力のため `colorlog` を依存に追加 ([#55](https://github.com/kurorosu/pochisegmentation/pull/55))
 
 ### Removed
 
@@ -36,6 +36,7 @@
 
 ### Fixed
 
+- `SegmentationMetrics` の `MeanIoU` / `DiceScore` に `input_format="index"` を指定し, インデックス形式入力での mIoU / Dice 誤計算を修正. ベストモデル選択と Early Stopping が正しい指標で動作するようになった (NA.)
 - mypy が検出した既存の型エラー 27 件を解消 (明示的な型注釈 / `cast` / imread の `None` ガード / matplotlib colormap API の更新) ([#37](https://github.com/kurorosu/pochisegmentation/pull/37))
 
 ## [1.0.0] - 2025-12-27
