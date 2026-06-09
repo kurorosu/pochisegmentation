@@ -42,11 +42,10 @@ class TestSegmentationMetrics:
         assert "PixelAccuracy" in result
         assert "F1" in result
 
-        # 値が妥当な範囲にあることを確認
+        # 全指標が 0.0-1.0 の範囲に収まることを確認
         for key, value in result.items():
             assert isinstance(value, float)
-            # DiceScoreはmacro平均でクラス数分の合計になる可能性がある
-            assert value >= 0.0, f"{key} の値が負: {value}"
+            assert 0.0 <= value <= 1.0, f"{key} の値が範囲外: {value}"
 
     def test_reset(self) -> None:
         """reset メソッドのテスト."""
@@ -80,6 +79,9 @@ class TestSegmentationMetrics:
         metrics.update(preds, targets)
         result = metrics.compute()
 
+        # 完全一致なので全指標が 1.0
+        assert result["mIoU"] == pytest.approx(1.0)
+        assert result["Dice"] == pytest.approx(1.0)
         assert result["PixelAccuracy"] == 1.0
         assert result["F1"] == 1.0
 
@@ -111,3 +113,21 @@ class TestSegmentationMetrics:
 
         assert isinstance(result, dict)
         assert len(result) == 4
+
+    def test_known_values(self) -> None:
+        """既知入力に対する mIoU / Dice の期待値を検証 (回帰防止)."""
+        metrics = SegmentationMetrics(num_classes=2, device="cpu")
+
+        # 2x2, 2 クラス. 1 画素のみ誤分類.
+        #   target = [[0, 0], [1, 1]], pred = [[0, 0], [1, 0]]
+        #   class0 IoU = 2/3, class1 IoU = 1/2 -> mIoU = 7/12 = 0.5833...
+        #   class0 Dice = 0.8, class1 Dice = 2/3 -> macro Dice = 0.7333...
+        target = torch.tensor([[[0, 0], [1, 1]]])
+        pred = torch.tensor([[[0, 0], [1, 0]]])
+
+        metrics.update(pred, target)
+        result = metrics.compute()
+
+        assert result["mIoU"] == pytest.approx(7 / 12)
+        assert result["Dice"] == pytest.approx((0.8 + 2 / 3) / 2)
+        assert result["PixelAccuracy"] == pytest.approx(0.75)
