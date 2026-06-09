@@ -36,7 +36,8 @@
 
 ### Fixed
 
-- `SegmentationMetrics` の `MeanIoU` / `DiceScore` に `input_format="index"` を指定し, インデックス形式入力での mIoU / Dice 誤計算を修正. ベストモデル選択と Early Stopping が正しい指標で動作するようになった (NA.)
+- `SegmentationMetrics` の `MeanIoU` / `DiceScore` に `input_format="index"` を指定し, インデックス形式入力での mIoU / Dice 誤計算を修正. ベストモデル選択と Early Stopping が正しい指標で動作するようになった ([#65](https://github.com/kurorosu/pochisegmentation/pull/65))
+- 評価指標テストが指標バグを回避する緩いアサート (`>= 0.0`) になっていた問題を是正. 完全一致での mIoU / Dice == 1.0, 値域 0.0-1.0, 既知入力の期待値を検証するよう強化 (NA.)
 - mypy が検出した既存の型エラー 27 件を解消 (明示的な型注釈 / `cast` / imread の `None` ガード / matplotlib colormap API の更新) ([#37](https://github.com/kurorosu/pochisegmentation/pull/37))
 
 ## [1.0.0] - 2025-12-27
